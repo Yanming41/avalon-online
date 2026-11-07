@@ -6,7 +6,7 @@ const AVATARS = ['🦁', '🐺', '🦊', '🐻', '🐼', '🐯', '🦉', '🦅',
 let ws, S = null, sel = new Set(), reveal = false, online = false, clockSkew = 0, showGuide = false;
 let myAvatar = localStorage.avatar || AVATARS[Math.floor(Math.random() * AVATARS.length)];
 
-function toast(m, ok) { const t = $('#toast'); t.textContent = m; t.style.background = ok ? 'var(--ok)' : 'var(--evil)'; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => (t.style.display = 'none'), 2800); }
+function toast(m, ok) { const t = $('#toast'); t.textContent = m; t.style.background = ok ? 'var(--ok)' : 'var(--evil)'; t.style.display = 'block'; t.classList.remove('out'); t.classList.remove('in'); void t.offsetWidth; t.classList.add('in'); clearTimeout(t._h); t._h = setTimeout(() => { t.classList.add('out'); setTimeout(() => (t.style.display = 'none'), 260); }, 2800); }
 function send(o) {
   if (S && S.viewAs && !['g', 'god', 'join', 'create'].includes(o.t)) o = { t: 'g', a: 'as', msg: o };
   if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); else toast('正在重连，请稍等…');
@@ -67,16 +67,16 @@ function preload(role) {
 }
 function showRole(k) {
   const R = ROLES[k];
-  $('#modal').innerHTML = `<div class="modal" onclick="if(event.target===this)this.remove()"><div class="box guide"><img class="portrait" src="${img(k)}" alt="" onerror="this.remove()" onclick="showDetail('${k}')" style="margin:0 auto 10px;max-height:38vh;width:auto;max-width:100%;cursor:zoom-in">
+  $('#modal').innerHTML = `<div class="modal" onclick="if(event.target===this)closeModal()"><div class="box guide"><img class="portrait" src="${img(k)}" alt="" onerror="this.remove()" onclick="showDetail('${k}',this)" style="margin:0 auto 10px;max-height:38vh;width:auto;max-width:100%;cursor:zoom-in">
   <h3 style="margin:0">${R.emo} ${R.name}（${R.side === 'good' ? '好人' : '坏人'}）</h3><p><b>知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul>
-  <button class="sec" onclick="$('#modal').innerHTML=''">关闭</button></div></div>`;
+  <button class="sec" onclick="closeModal()">关闭</button></div></div>`;
 }
 
 // ---------- 渲染 ----------
 function render() {
   const app = $('#app');
-  if (WATCH) return (app.innerHTML = tvView());
-  if (!S) return (app.innerHTML = homeView());
+  if (WATCH) { app.innerHTML = tvView(); return animateView(app, 'tv:' + (S ? S.phase : '')); }
+  if (!S) { app.innerHTML = homeView(); return animateView(app, 'home'); }
   const meP = S.players.find((p) => p.id === S.me);
   let h = `<div class="top"><span class="dot ${online ? '' : 'off'}"></span>房间 <b>${S.code}</b>
     ${meP ? `· ${meP.avatar} ${esc(meP.name)}${S.me === S.hostId ? '（房主）' : ''}` : ''}${isGod() ? (S.viewAs ? ` · <b style="color:#c9a6ff">👁 代入 ${esc(P(S.viewAs).name)}</b>` : ' · <b style="color:#c9a6ff">👁 上帝</b>') : ''}
@@ -88,6 +88,8 @@ function render() {
   h += rulesView();
   if (meP) h += `<button class="sec" onclick="leave()">离开房间</button>`;
   app.innerHTML = h;
+  animateView(app, [S.phase, S.quest, S.viewAs || '', S.god ? 'g' : ''].join(':'));
+  popQuest();
   tick();
 }
 
@@ -110,7 +112,7 @@ function homeView() {
 // 首页图鉴：所有角色立绘 + 道具卡，点一下翻面看能力
 function codexView() {
   const card = (cls, imgSrc, name, back, key) => `<div class="flip ${cls}" onclick="cardClick(this,'${key}')"><div class="in">
-    <div class="fc"><div class="fb">${name.split(' ')[0]}</div><img loading="lazy" src="${imgSrc}" alt="" onerror="this.remove()"><i class="frm"></i><div class="nm2">${name.replace(/^\S+ /, '')}</div><span class="zoom" onclick="event.stopPropagation();showDetail('${key}')">🔍</span></div>
+    <div class="fc"><div class="fb">${name.split(' ')[0]}</div><img loading="lazy" src="${imgSrc}" alt="" onerror="this.remove()"><i class="frm"></i><div class="nm2">${name.replace(/^\S+ /, '')}</div><span class="zoom" onclick="event.stopPropagation();showDetail('${key}',this.parentNode.querySelector('img'))">🔍</span></div>
     <div class="bk">${back}</div></div></div>`;
   const roleCard = ([k, R]) => card(R.side === 'good' ? 'g' : 'e', img(k), `${R.emo} ${R.name}`,
     `<b class="t">${R.emo} ${R.name}</b><span class="side">${R.side === 'good' ? '正义阵营' : '邪恶阵营'}</span><p><b>知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p>`, k);
@@ -168,7 +170,7 @@ function pickGrid(host) {
     return `<div class="pick ${side} ${on ? 'on' : ''} ${lock ? 'lock' : ''} ${host && !lock ? 'can' : ''}" ${host && !lock ? `onclick="togPick('${k}')"` : ''}>
       <div class="fb">${R.emo || (ITEMS[pic.replace('items/', '')] || {}).emo || ''}</div><img loading="lazy" src="${picSrc(pic)}" alt="" onerror="this.remove()"><i class="frm"></i>
       <div class="cap">${cap}</div>${lock ? '<span class="lk">必选</span>' : on ? '<span class="lk ok">✓</span>' : ''}
-      <span class="zoom" onclick="event.stopPropagation();showDetail('${pic.startsWith('items/') ? 'item:' + pic.slice(6) : pic}')">🔍</span></div>`;
+      <span class="zoom" onclick="event.stopPropagation();showDetail('${pic.startsWith('items/') ? 'item:' + pic.slice(6) : pic}',this.parentNode.querySelector('img'))">🔍</span></div>`;
   };
   return `<div class="pgh">正义阵营</div><div class="pgrid">${PICKS.good.map((c) => card(c, 'g')).join('')}</div>
   <div class="pgh">邪恶阵营</div><div class="pgrid">${PICKS.evil.map((c) => card(c, 'e')).join('')}</div>
@@ -183,32 +185,91 @@ function togPick(k) {
 
 // ---------- 立绘放大浏览（点一下放大到原尺寸，可拖动；再点一下或点 ✕ 关闭） ----------
 const WIDE = () => matchMedia('(hover: hover) and (pointer: fine)').matches && innerWidth >= 700; // 电脑
-function cardClick(el, key) { if (WIDE()) showDetail(key); else el.classList.toggle('on'); }
+function cardClick(el, key) { if (WIDE()) showDetail(key, el.querySelector('img')); else el.classList.toggle('on'); }
 function detailHtml(key) {
   if (key.startsWith('item:')) { const I = ITEMS[key.slice(5)]; return `<h3>${I.emo} ${I.name}</h3><p>${I.desc}</p>`; }
   const R = ROLES[key]; if (!R) return '';
   return `<h3>${R.emo} ${R.name}</h3><div class="side ${R.side}">${R.side === 'good' ? '正义阵营' : '邪恶阵营'}</div>
     <p><b>你知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p><p><b>玩法建议：</b></p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul>`;
 }
-function showDetail(key) {
+function showDetail(key, from) {
   const src = key.startsWith('item:') ? `img/items/${key.slice(5)}.webp` : img(key);
   const name = key.startsWith('item:') ? ITEMS[key.slice(5)].name : ROLES[key].name;
-  zoomImg(src, name, detailHtml(key));
+  zoomImg(src, name, detailHtml(key), from);
 }
-function zoomImg(src, title, html) {
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// 把元素从 from 的位置/大小，动画过渡到它自己的位置（FLIP）
+function flyFrom(elm, from, reverse, done) {
+  const r1 = from && from.isConnected ? from.getBoundingClientRect() : null, r2 = elm.getBoundingClientRect();
+  if (REDUCED || !r1 || !r1.width || !r2.width) { done && done(); return false; }
+  const t = `translate(${r1.left - r2.left}px,${r1.top - r2.top}px) scale(${r1.width / r2.width},${r1.height / r2.height})`;
+  elm.style.transformOrigin = '0 0';
+  if (!reverse) {
+    elm.style.transition = 'none'; elm.style.transform = t; elm.getBoundingClientRect();
+    elm.style.transition = 'transform .5s cubic-bezier(.2,.85,.25,1)'; elm.style.transform = '';
+  } else {
+    elm.style.transition = 'transform .38s cubic-bezier(.5,0,.75,.4)'; elm.style.transform = t;
+  }
+  setTimeout(() => done && done(), reverse ? 380 : 500);
+  return true;
+}
+function zoomImg(src, title, html, from) {
   const el = document.createElement('div');
-  el.className = 'lightbox';
+  el.className = 'lightbox opening';
   if (html) el.classList.add('detail');
-  el.innerHTML = `<div class="lbx" onclick="event.stopPropagation();this.parentNode.remove()">✕</div><div class="lbm"><div class="lbs"><div class="lbf"><img src="${src}" alt="" onerror="this.parentNode.classList.add('noimg')"><i class="frm plain"></i></div></div>
+  el.innerHTML = `<div class="lbx">✕</div><div class="lbm"><div class="lbs"><div class="lbf"><img src="${src}" alt="" onerror="this.parentNode.classList.add('noimg')"></div></div>
     ${html ? `<div class="lbd" onclick="event.stopPropagation()">${html}<div class="mute" style="margin-top:10px">点图片放大细节 · 点空白处关闭</div></div>` : `<div class="lbt">${title || ''}<br><small>点图片放大 / 缩小，放大后可拖动</small></div>`}</div>`;
-  const im = el.querySelector('img'), sc = el.querySelector('.lbs');
+  const im = el.querySelector('img'), sc = el.querySelector('.lbs'), fr = el.querySelector('.lbf');
+  const close = () => {
+    if (el.classList.contains('closing')) return;
+    el.classList.add('closing');
+    if (el.classList.contains('big')) { el.classList.remove('big'); im.style.width = ''; }
+    flyFrom(fr, from, true);
+    setTimeout(() => el.remove(), 380);
+  };
+  el.querySelector('.lbx').onclick = (e) => { e.stopPropagation(); close(); };
+  el.onclick = close;
+  // 点图放大 / 缩小：宽度过渡动画，放大时以点击位置为中心
   im.onclick = (e) => {
     e.stopPropagation();
-    const big = el.classList.toggle('big');
-    if (big) { const r = im.getBoundingClientRect(); const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height; requestAnimationFrame(() => { sc.scrollLeft = sc.scrollWidth * fx - sc.clientWidth / 2; sc.scrollTop = sc.scrollHeight * fy - sc.clientHeight / 2; }); }
+    const r = im.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
+    const big = !el.classList.contains('big');
+    const w0 = r.width, w1 = big ? Math.max(w0 * 2.2, innerWidth * 1.6) : null;
+    im.style.transition = 'none'; im.style.width = w0 + 'px'; im.style.maxWidth = 'none'; im.style.maxHeight = 'none';
+    el.classList.toggle('big', big); im.getBoundingClientRect();
+    im.style.transition = REDUCED ? 'none' : 'width .42s cubic-bezier(.2,.85,.25,1)';
+    if (big) {
+      im.style.width = w1 + 'px';
+      const t0 = performance.now();
+      const follow = () => { sc.scrollLeft = im.offsetWidth * fx - sc.clientWidth / 2; sc.scrollTop = im.offsetHeight * fy - sc.clientHeight / 2; if (performance.now() - t0 < 460) requestAnimationFrame(follow); };
+      requestAnimationFrame(follow);
+    } else {
+      // 缩回：先算出原本的显示宽度再过渡
+      const box = sc.getBoundingClientRect(), ratio = im.naturalWidth / im.naturalHeight || 2 / 3;
+      const maxH = el.classList.contains('detail') ? (innerWidth >= 760 ? innerHeight * 0.86 : innerHeight * 0.52 - 14) : box.height;
+      const target = Math.min(box.width, maxH * ratio);
+      im.style.width = target + 'px';
+      setTimeout(() => { im.style.width = ''; im.style.maxWidth = ''; im.style.maxHeight = ''; im.style.transition = ''; }, 440);
+    }
   };
-  el.onclick = () => el.remove();
   document.body.appendChild(el);
+  const go = () => { flyFrom(fr, from, false); requestAnimationFrame(() => el.classList.remove('opening')); };
+  if (im.complete) go(); else { im.onload = go; setTimeout(() => el.classList.contains('opening') && go(), 600); }
+}
+
+// ---------- 页面切换动画：换页面/阶段时内容依次淡入上浮 ----------
+let lastViewKey = null;
+function animateView(app, key) {
+  if (key === lastViewKey || REDUCED) { lastViewKey = key; return; }
+  lastViewKey = key;
+  [...app.children].forEach((c, i) => { c.style.setProperty('--i', Math.min(i, 12)); });
+  app.classList.remove('vt'); void app.offsetWidth; app.classList.add('vt');
+  clearTimeout(animateView._t); animateView._t = setTimeout(() => app.classList.remove('vt'), 1200);
+}
+// 关闭弹窗（带淡出动画）
+function closeModal() {
+  const m = $('#modal .modal'); if (!m) return;
+  m.classList.add('out'); setTimeout(() => { if (m.isConnected) m.remove(); }, 220);
 }
 
 function roleCountHint() {
@@ -235,11 +296,17 @@ function roleCard() {
   if (S.myChecks && S.myChecks.length) extra.push(`<div><b>🧜‍♀️ 我的查验结果</b>${S.myChecks.map((c) => `<div>第${c.quest + 1}轮后：${seat(c.id)}号 ${nm(c.id)} 是 <b style="color:${c.evil ? 'var(--evil)' : 'var(--good)'}">${c.evil ? '坏人' : '好人'}</b></div>`).join('')}</div>`);
   if (S.myExcalSeen) extra.push(`<div><b>🔱 王者之剑</b>：第${S.myExcalSeen.quest + 1}轮你翻转了 ${nm(S.myExcalSeen.id)} 的牌，原来是「${CARD[S.myExcalSeen.card].t}」</div>`);
   const bg = reveal && IMG_OK[r.art] ? ` style="background:url(${img(r.art)})"` : '';
-  return `<div class="role ${reveal ? 'show ' + (r.evilNow ? 'e' : 'g') + (IMG_OK[r.art] ? '' : ' noimg') : ''}" id="rc"${bg}>${inner}<i class="frm plain"></i></div>${extra.length ? `<div class="card" style="font-size:13px">${extra.join('')}<div class="mute">以上信息只有你能看到</div></div>` : ''}
+  return `<div class="role ${reveal ? 'show ' + (revealAnim ? 'anim ' : '') + (r.evilNow ? 'e' : 'g') + (IMG_OK[r.art] ? '' : ' noimg') : ''}" id="rc"${bg}>${inner}<i class="frm plain"></i></div>${extra.length ? `<div class="card" style="font-size:13px">${extra.join('')}<div class="mute">以上信息只有你能看到</div></div>` : ''}
   <div class="card guide"><details ${showGuide ? 'open' : ''} ontoggle="showGuide=this.open"><summary>📖 我的角色怎么玩（展开前确认旁边没人偷看）</summary>
-  ${IMG_OK[r.art] ? `<img class="gp" src="${img(r.art)}" alt="" onclick="showDetail('${r.role}')">` : ''}<p><b>${R.emo} ${R.name}</b>（${R.side === 'good' ? '好人' : '坏人'}）</p><p><b>你知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul></details></div>`;
+  ${IMG_OK[r.art] ? `<img class="gp" src="${img(r.art)}" alt="" onclick="showDetail('${r.role}',this)">` : ''}<p><b>${R.emo} ${R.name}</b>（${R.side === 'good' ? '好人' : '坏人'}）</p><p><b>你知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul></details></div>`;
 }
 
+let lastResults = null;
+function popQuest() {
+  const n = S && S.results ? S.results.length : 0;
+  if (lastResults !== null && n > lastResults) { const q = document.querySelectorAll('.quests .q')[n - 1]; if (q) q.classList.add('pop'); }
+  lastResults = n;
+}
 function questTrack() {
   return `<div class="card"><div class="quests">${S.teamSizes.map((sz, i) => {
     const r = S.results[i];
@@ -328,7 +395,7 @@ function gameView() {
     h += '</div>';
   } else if (S.phase === 'end') {
     h += `<div class="banner" style="background:${S.winner === 'good' ? 'var(--good)' : 'var(--evil)'};color:#fff;font-size:20px">${S.winner === 'good' ? '🏆 正义阵营获胜' : '😈 邪恶阵营获胜'}<div style="font-size:14px;font-weight:400">${esc(S.reason)}</div></div>`;
-    h += `<div class="card"><h3>身份揭晓</h3><div class="gallery">${S.allRoles.map((r) => `<div class="gi ${r.evil ? 'e' : 'g'} ${S.assassinTarget === r.id ? 'dead' : ''}" onclick="showDetail('${r.role}')"><img class="portrait" src="${img(r.art)}" alt="" onerror="this.onerror=null;this.src='${img(r.role)}'"><i class="frm"></i><div class="cap">${seat(r.id)}号 ${nm(r.id)}<br><b style="color:${r.evil ? '#ff8a85' : '#9cc3ff'}">${r.name}</b>${S.assassinTarget === r.id ? ' 🗡️' : ''}</div></div>`).join('')}</div></div>
+    h += `<div class="card"><h3>身份揭晓</h3><div class="gallery">${S.allRoles.map((r) => `<div class="gi ${r.evil ? 'e' : 'g'} ${S.assassinTarget === r.id ? 'dead' : ''}" onclick="showDetail('${r.role}',this.querySelector('img'))"><img class="portrait" src="${img(r.art)}" alt="" onerror="this.onerror=null;this.src='${img(r.role)}'"><i class="frm"></i><div class="cap">${seat(r.id)}号 ${nm(r.id)}<br><b style="color:${r.evil ? '#ff8a85' : '#9cc3ff'}">${r.name}</b>${S.assassinTarget === r.id ? ' 🗡️' : ''}</div></div>`).join('')}</div></div>
     <div class="card">${plist(false)}</div>`;
     if (S.me === S.hostId || isGod()) h += `<button onclick="${isGod() && S.me !== S.hostId ? "god('start')" : "send({t:'start'})"}">再来一局（重新发身份）</button><button class="sec" onclick="${isGod() && S.me !== S.hostId ? "god('lobby')" : "send({t:'lobby'})"}">回到大厅改配置</button>`;
   }
@@ -407,7 +474,7 @@ function setRel(a, b, k) {
 }
 function askRel(a, b) {
   linkFrom = null; render();
-  $('#modal').innerHTML = `<div class="modal" onclick="if(event.target===this)this.remove()"><div class="box"><h3 style="margin:0 0 10px">${nm(a)} 和 ${nm(b)} 的关系</h3>
+  $('#modal').innerHTML = `<div class="modal" onclick="if(event.target===this)closeModal()"><div class="box"><h3 style="margin:0 0 10px">${nm(a)} 和 ${nm(b)} 的关系</h3>
   <button class="okb" onclick="setRel('${a}','${b}','same')">🔗 同边（一伙的 / 互保）</button>
   <button class="evil" onclick="setRel('${a}','${b}','opp')">⚔️ 互踩（对立 / 至少一个坏人）</button>
   <button class="sec" onclick="setRel('${a}','${b}',null)">清除关系</button></div></div>`;
@@ -491,8 +558,8 @@ function maybeEvent() {
     <div class="center">${e.fails} 张失败${e.magics ? ` · ${e.magics} 张魔法（${e.magics % 2 ? '结果被反转' : '互相抵消'}）` : ''}${e.need === 2 ? '<br>本轮需要 2 张失败才算失败' : ''}</div>`;
   }
   vibrate(100);
-  $('#modal').innerHTML = `<div class="modal" onclick="this.remove()"><div class="box">${h}<button class="sec" style="margin-top:12px">知道了</button></div></div>`;
-  if (WATCH) { clearTimeout(maybeEvent._t); maybeEvent._t = setTimeout(() => { $('#modal').innerHTML = ''; }, 10000); }
+  $('#modal').innerHTML = `<div class="modal" onclick="closeModal()"><div class="box">${h}<button class="sec" style="margin-top:12px">知道了</button></div></div>`;
+  if (WATCH) { clearTimeout(maybeEvent._t); maybeEvent._t = setTimeout(closeModal, 10000); }
 }
 
 // ---------- 观战 / 投屏大屏 ----------
@@ -576,7 +643,7 @@ function godView() {
 }
 
 function rulesView() {
-  return `${S ? `<div class="card"><details><summary>🖼️ 角色图鉴</summary><div class="gallery" style="margin-top:8px">${Object.entries(ROLES).map(([k, R]) => `<div class="gi ${R.side === 'good' ? 'g' : 'e'}" onclick="showDetail('${k}')"><img class="portrait" loading="lazy" src="${img(k)}" alt="" onerror="this.style.visibility='hidden'"><i class="frm"></i><div class="cap">${R.emo} ${R.name}</div></div>`).join('')}</div></details></div>` : ''}
+  return `${S ? `<div class="card"><details><summary>🖼️ 角色图鉴</summary><div class="gallery" style="margin-top:8px">${Object.entries(ROLES).map(([k, R]) => `<div class="gi ${R.side === 'good' ? 'g' : 'e'}" onclick="showDetail('${k}',this.querySelector('img'))"><img class="portrait" loading="lazy" src="${img(k)}" alt="" onerror="this.style.visibility='hidden'"><i class="frm"></i><div class="cap">${R.emo} ${R.name}</div></div>`).join('')}</div></details></div>` : ''}
   <div class="card rules"><details><summary>📜 规则速查</summary>
   <p><b>胜负：</b>好人完成 3 次任务，并且最后梅林没被刺中，好人赢。任务失败 3 次、连续 5 次组队被否决、或者刺客刺中梅林，坏人赢。</p>
   <ol><li><b>组队（发车）：</b>队长按本轮人数选队员（可以选自己）。发车前可以开启「轮流发言」，每人限时发言。</li>
@@ -622,10 +689,12 @@ setInterval(tick, 500);
 
 // 按住看身份
 const isRc = (e) => e.target.closest && e.target.closest('#rc');
-const on = (e) => { if (isRc(e)) { e.preventDefault(); reveal = true; render(); } };
+let revealAnim = false;
+const on = (e) => { if (isRc(e)) { e.preventDefault(); reveal = true; revealAnim = true; render(); revealAnim = false; } };
 const off = () => { if (reveal) { reveal = false; render(); } };
 document.addEventListener('touchstart', on, { passive: false }); document.addEventListener('mousedown', on);
 document.addEventListener('touchend', off); document.addEventListener('mouseup', off); document.addEventListener('touchcancel', off);
 document.addEventListener('contextmenu', (e) => isRc(e) && e.preventDefault());
 
 render(); connect();
+document.addEventListener('click', (e) => { const sm = e.target.closest && e.target.closest('summary'); if (!sm) return; const d = sm.parentNode; requestAnimationFrame(() => { if (d.open) { d.classList.add('just'); setTimeout(() => d.classList.remove('just'), 400); } }); });

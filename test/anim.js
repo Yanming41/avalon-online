@@ -1,0 +1,34 @@
+// 动画冒烟测试：无头 Chrome 里打开首页，点卡片打开详情（飞出动画）、点图放大、关闭；检查无报错且元素正确增删
+const { spawn } = require('child_process'); const WebSocket = require('ws');
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms)); const OUT = process.argv[2];
+(async () => {
+  const chrome = spawn('C:/Program Files/Google/Chrome/Application/chrome.exe', ['--headless=new', '--remote-debugging-port=9334', '--user-data-dir=' + OUT + '/prof2', 'about:blank']);
+  await sleep(2500);
+  const list = await (await fetch('http://127.0.0.1:9334/json')).json();
+  const page = new WebSocket(list.find((t) => t.type === 'page').webSocketDebuggerUrl); await new Promise((r) => page.on('open', r));
+  let id = 0; const pend = {}; const errs = [];
+  page.on('message', (d) => { const m = JSON.parse(d); if (pend[m.id]) pend[m.id](m.result); if (m.method === 'Runtime.exceptionThrown') errs.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text); });
+  const cdp = (method, params = {}) => new Promise((r) => { pend[++id] = r; page.send(JSON.stringify({ id, method, params })); });
+  const ev = async (e) => (await cdp('Runtime.evaluate', { expression: e, returnByValue: true, awaitPromise: true })).result.value;
+  await cdp('Runtime.enable'); await cdp('Page.enable');
+  await cdp('Emulation.setDeviceMetricsOverride', { width: 1400, height: 900, deviceScaleFactor: 1, mobile: false });
+  await cdp('Page.navigate', { url: 'http://localhost:3123/' }); await sleep(1500);
+  const ok = (c, m) => console.log(c ? 'ok  ' : 'FAIL', m);
+  ok(await ev(`document.getElementById('app').classList.contains('vt')`), '首页进入时有淡入动画');
+  await ev(`showDetail('merlin', document.querySelector('.flip img'))`); await sleep(80);
+  const mid = await ev(`getComputedStyle(document.querySelector('.lightbox .lbf')).transform`);
+  ok(mid && mid !== 'none', '打开详情时图片从卡片位置飞出（动画进行中有 transform）');
+  await sleep(700);
+  ok(await ev(`getComputedStyle(document.querySelector('.lightbox .lbf')).transform === 'none' && !document.querySelector('.lightbox').classList.contains('opening')`), '飞出动画结束，图片停在中间');
+  const r = await ev(`(()=>{const b=document.querySelector('.lightbox img').getBoundingClientRect();return [b.x+b.width/2,b.y+b.height/2,b.width]})()`);
+  await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', x: r[0], y: r[1], button: 'left', clickCount: 1 }); await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', x: r[0], y: r[1], button: 'left', clickCount: 1 });
+  await sleep(600);
+  const w2 = await ev(`document.querySelector('.lightbox img').getBoundingClientRect().width`);
+  ok(w2 > r[2] * 1.8, `点图放大（宽 ${Math.round(r[2])} → ${Math.round(w2)}）`);
+  await ev(`document.querySelector('.lightbox .lbx').click()`); await sleep(150);
+  ok(await ev(`!!document.querySelector('.lightbox.closing')`), '关闭时有飞回动画');
+  await sleep(500);
+  ok(await ev(`!document.querySelector('.lightbox')`), '动画结束后移除');
+  console.log('errors:', errs.length ? errs : 'none');
+  chrome.kill(); process.exit(0);
+})();

@@ -197,6 +197,44 @@ body.tv .tvgrid > div:last-child .card{font-size:18px!important}
   .lightbox.detail .lbd{flex:0 1 460px;max-height:86vh;margin:0;font-size:16px;padding:22px 26px}
   .lightbox .lbd h3{font-size:28px}
 }
+/* ---------- 动画 ---------- */
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes fadeOut{to{opacity:0}}
+@keyframes popIn{from{opacity:0;transform:scale(.88) translateY(10px)}to{opacity:1;transform:none}}
+@keyframes popOut{to{opacity:0;transform:scale(.94) translateY(6px)}}
+@keyframes slideIn{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:none}}
+@keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+@keyframes cardReveal{0%{transform:perspective(800px) rotateY(90deg);filter:brightness(2)}100%{transform:none;filter:none}}
+@keyframes qpop{0%{transform:scale(.4)}60%{transform:scale(1.18)}100%{transform:scale(1)}}
+@keyframes glow{0%,100%{box-shadow:0 0 12px #e0b45a55}50%{box-shadow:0 0 22px #e0b45aaa}}
+@keyframes toastIn{from{opacity:0;transform:translate(-50%,20px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes toastOut{to{opacity:0;transform:translate(-50%,12px)}}
+.vt > *{animation:rise .5s cubic-bezier(.2,.8,.25,1) both;animation-delay:calc(var(--i,0) * 45ms)}
+.modal{animation:fadeIn .22s both}.modal .box{animation:popIn .32s cubic-bezier(.2,.85,.25,1) both}
+.modal.out{animation:fadeOut .22s both}.modal.out .box{animation:popOut .22s both}
+.lightbox{animation:none;transition:background-color .4s}
+.lightbox.opening{background-color:rgba(5,3,1,0)}
+.lightbox.opening .lbd,.lightbox.opening .lbt,.lightbox.opening .lbx{opacity:0}
+.lightbox .lbd{animation:slideIn .45s .12s cubic-bezier(.2,.85,.25,1) both}
+@media (max-width:759px){.lightbox .lbd{animation-name:slideUp}}
+.lightbox .lbt,.lightbox .lbx{animation:fadeIn .4s .2s both}
+.lightbox.closing{background-color:rgba(5,3,1,0);transition:background-color .38s}
+.lightbox.closing .lbd,.lightbox.closing .lbt,.lightbox.closing .lbx{opacity:0;transition:opacity .2s}
+.role.show.anim{animation:cardReveal .42s cubic-bezier(.2,.85,.25,1) both}
+.q.pop{animation:qpop .6s cubic-bezier(.3,1.6,.5,1) both}
+.q.cur{animation:glow 2.4s ease-in-out infinite}
+.toast.in{animation:toastIn .28s cubic-bezier(.2,.85,.25,1) both}.toast.out{animation:toastOut .26s both}
+details.just[open] > *:not(summary){animation:rise .35s cubic-bezier(.2,.8,.25,1) both}
+.p{transition:background .2s,border-color .2s,transform .15s}.p:active{transform:scale(.985)}
+.tag{transition:background .25s,color .25s}
+.av{transition:border-color .25s,box-shadow .25s,transform .2s}.av[data-av]:active{transform:scale(.9)}
+.bar i{transition:width 1s linear}
+.banner{transition:background .3s}
+button:hover:not(:disabled){filter:brightness(1.08)}
+.flip:hover .fc img,.pick.can:hover img,.gallery .gi:hover img{transform:scale(1.04)}
+.flip .fc img,.pick img,.gallery .gi img{transition:transform .35s ease}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
