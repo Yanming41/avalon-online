@@ -9,11 +9,12 @@ const AV = ['🦁','🐺','🦊','🐻','🐼','🐯','🦉'];
 (async () => {
   for (let i = 0; i < 7; i++) { const c = await mk(); cl.push(c); tx(c, { t: i ? 'join' : 'create', code, name: ['阿明','小红','老王','Leo','七七','大胖','Mia'][i], avatar: AV[i], token: tag + i }); await sleep(80); }
   const S = () => cl[0].s, by = (id) => cl.find((c) => c.s.me === id);
+  tx(cl[0], { t: 'settings', settings: { cleric: true, sorcerer: true, lancelot: 2, percival: false, morgana: false } }); await sleep(80);
   tx(cl[0], { t: 'start' }); await sleep(150);
   for (let k = 0; k < 3; k++) { // 一次否决、一次通过+任务失败、再一次发车
     const s = S(); tx(by(s.leader), { t: 'propose', team: s.players.slice(k, k + s.teamSizes[s.quest]).map((p) => p.id) }); await sleep(80);
     cl.forEach((c, i) => tx(c, { t: 'vote', approve: k === 0 ? i < 2 : i < 5 })); await sleep(100);
-    if (S().phase === 'quest') { for (const id of S().team) tx(by(id), { t: 'quest', success: false }); await sleep(100); }
+    if (S().phase === 'quest') { for (const id of S().team) { const c = by(id); tx(c, { t: 'quest', card: c.s.myCards.includes('F') ? 'F' : c.s.myCards.at(-1) }); } await sleep(100); }
   }
   const s = S(); tx(by(s.leader), { t: 'propose', team: s.players.slice(0, s.teamSizes[s.quest]).map((p) => p.id) }); await sleep(80);
   cl.slice(0, 3).forEach((c) => tx(c, { t: 'vote', approve: true }));

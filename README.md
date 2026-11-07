@@ -22,3 +22,4 @@
 ## 测试
     GOD_PASSWORD=test PORT=3123 npm start  # 另开终端
     node test/sim.js     # 7 个机器人跑完一整局
+    node test/roles.js   # 扩展角色/道具规则测试

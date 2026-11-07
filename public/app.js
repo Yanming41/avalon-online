@@ -32,6 +32,7 @@ function connect() {
       if (prev && (prev.phase !== S.phase || prev.quest !== S.quest)) sel.clear();
       if (S.phase === 'propose' && S.leader === S.me && (!prev || prev.leader !== S.me || prev.phase !== 'propose')) vibrate([80, 60, 80]);
       if (S.speech && S.speech.order[S.speech.idx] === S.me && (!prev || !prev.speech || prev.speech.idx !== S.speech.idx)) vibrate(200);
+      if (prev && prev.gameId === S.gameId && (S.bellSeq || 0) > (prev.bellSeq || 0)) bell();
       render(); maybeEvent();
     }
     if (m.t === 'error') {
@@ -56,7 +57,7 @@ function render() {
   const meP = S.players.find((p) => p.id === S.me);
   let h = `<div class="top"><span class="dot ${online ? '' : 'off'}"></span>房间 <b>${S.code}</b>
     ${meP ? `· ${meP.avatar} ${esc(meP.name)}${S.me === S.hostId ? '（房主）' : ''}` : ''}${isGod() ? ' · <b style="color:#c9a6ff">👁 上帝</b>' : ''}
-    <span class="sp">${S.myPin ? `重连码 <b>${S.myPin}</b>` : ''}</span></div>`;
+    <span class="sp"><span onclick="toggleMute()" style="cursor:pointer;font-size:16px">${muted ? '🔇' : '🔔'}</span> ${S.myPin ? `重连码 <b>${S.myPin}</b>` : ''}</span></div>`;
   if (!online) h += `<div class="banner" style="background:#5e1d1d;color:#fff">连接断开，正在自动重连…</div>`;
   h += S.phase === 'lobby' ? lobbyView() : gameView();
   if (isGod()) h += godView();
@@ -107,9 +108,22 @@ function lobbyView() {
   ${S.me ? `<div class="card"><h3>我的头像</h3><div class="avpick">${AVATARS.map((a) => `<span class="${a === P(S.me).avatar ? 'on' : ''}" onclick="pickAv('${a}')">${a}</span>`).join('')}</div></div>` : ''}
   <div class="card"><h3>玩家 ${n}/10（5 人起）</h3><div class="players">${S.players.map((p) => `<div class="p ${p.online ? '' : 'off'}"><span class="av">${p.avatar}</span>${esc(p.name)}<span class="tags">${p.id === S.hostId ? '<span class="tag lead">房主</span>' : ''}${p.online ? '' : '<span class="tag">离线</span>'}${host && p.id !== S.me ? `<span class="tag" onclick="${isGod() ? `god('kick',{id:'${p.id}'})` : `send({t:'kick',id:'${p.id}'})`}">移出</span>` : ''}</span></div>`).join('')}</div></div>
   <div class="card"><h3>角色配置</h3><div class="mute">梅林、刺客一定有，其余位置自动补忠臣和爪牙</div>
-    ${ck('percival', '🛡️ 派西维尔（好人）')}${ck('morgana', '🔮 莫甘娜（坏人）')}${ck('mordred', '👑 莫德雷德（坏人）')}${ck('oberon', '🌑 奥伯伦（坏人）')}
+    <div class="mute" style="margin-top:6px">好人</div>${ck('percival', '🛡️ 派西维尔')}${ck('cleric', '⛪ 牧师（知道首任队长阵营）')}${ck('troublemaker', '🎭 捣蛋鬼（被查验显示为坏）')}
+    <div class="mute" style="margin-top:6px">坏人</div>${ck('morgana', '🔮 莫甘娜')}${ck('mordred', '👑 莫德雷德')}${ck('oberon', '🌑 奥伯伦')}${ck('lunatic', '🤪 疯子（必须出失败）')}${ck('brute', '🪓 莽夫（只在前3轮能出失败）')}${ck('revealer', '📢 暴露者（第2次失败后公开）')}${ck('trickster', '🃏 诡术师（被查验可伪装）')}
+    <div class="mute" style="margin-top:6px">成对角色（一好一坏）</div>${ck('sorcerer', '✨ 巫师（可出魔法牌反转结果）')}
+    <label class="ck">⚜️ 兰斯洛特 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({lancelot:+this.value})">${['关闭', '规则1：第3轮起每次组队翻忠诚牌', '规则2：每轮开始翻忠诚牌', '规则3：不换阵营，互相认识'].map((t, i) => `<option value="${i}" ${st.lancelot === i ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+    <div class="mute" style="margin-top:6px">道具</div>${ck('lady', '🧜‍♀️ 湖中仙女（第2-4轮后查验阵营）')}${ck('excalibur', '🔱 王者之剑（队员可翻转别人的任务牌）')}
+    ${roleCountHint()}
     <label class="ck">⏱ 每人发言时长 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({speechSecs:+this.value})">${[30, 60, 90, 120, 180, 300].map((s) => `<option value="${s}" ${st.speechSecs === s ? 'selected' : ''}>${s >= 60 ? s / 60 + ' 分钟' : s + ' 秒'}</option>`).join('')}</select></label></div>
   ${host ? `<button onclick="${isGod() ? "god('start')" : "send({t:'start'})"}" ${n < 5 ? 'disabled' : ''}>开始游戏 · 发身份</button>` : '<div class="banner">等待房主开始</div>'}`;
+}
+function roleCountHint() {
+  const st = S.settings, n = S.players.length, E = { 5: 2, 6: 2, 7: 3, 8: 3, 9: 3, 10: 4 }[n];
+  if (!E) return '';
+  const e = 1 + ['morgana', 'mordred', 'oberon', 'lunatic', 'brute', 'revealer', 'trickster'].filter((k) => st[k]).length + (st.sorcerer ? 1 : 0) + (st.lancelot ? 1 : 0);
+  const g = 1 + ['percival', 'cleric', 'troublemaker'].filter((k) => st[k]).length + (st.sorcerer ? 1 : 0) + (st.lancelot ? 1 : 0);
+  const bad = e > E || g > n - E;
+  return `<div class="mute" style="margin-top:6px;color:${bad ? 'var(--evil)' : ''}">${n} 人局：好人 ${n - E}（已选特殊 ${g}）· 坏人 ${E}（已选特殊 ${e}）${bad ? ' · 特殊角色太多了' : ''}</div>`;
 }
 function setS(s) { isGod() && S.me !== S.hostId ? god('settings', { settings: s }) : send({ t: 'settings', settings: s }); }
 function share() { const u = location.origin + '/?r=' + S.code; navigator.clipboard ? navigator.clipboard.writeText(u).then(() => toast('已复制：' + u, true)) : prompt('复制链接', u); }
@@ -118,11 +132,15 @@ function roleCard() {
   const r = S.myRole; if (!r) return '';
   const R = ROLES[r.role];
   const inner = reveal
-    ? `<div class="emo">${R.emo}</div><div class="nm" style="color:${r.evil ? '#ff8a85' : '#9cc3ff'}">${r.name}</div><div>${r.evil ? '邪恶阵营' : '正义阵营'}</div>
+    ? `<div class="emo">${R.emo}</div><div class="nm" style="color:${r.evilNow ? '#ff8a85' : '#9cc3ff'}">${r.name}</div><div>${r.evilNow ? '邪恶阵营' : '正义阵营'}${r.evil !== r.evilNow ? '（已换阵营！）' : ''}</div>
        <div class="mute" style="margin-top:6px">${R.know}</div>
        ${r.sees.length ? `<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap;justify-content:center">${r.sees.map((x) => `<span class="tag ${r.evil ? 'evil' : 'good'}">${seat(x.id)}号 ${nm(x.id)} · ${x.tag}</span>`).join('')}</div>` : ''}`
     : `<div class="emo">🂠</div><div class="nm">按住查看身份</div><div class="mute">松手就隐藏，注意别让旁边的人看到</div>`;
-  return `<div class="role ${reveal ? 'show ' + (r.evil ? 'e' : 'g') : ''}" id="rc">${inner}</div>
+  const extra = [];
+  if (r.role === 'trickster') extra.push(`<label class="ck">🃏 被查验时显示为 <select style="width:auto" onchange="send({t:'trickShow',evil:this.value==='1'})"><option value="0" ${r.trickShowEvil ? '' : 'selected'}>好人</option><option value="1" ${r.trickShowEvil ? 'selected' : ''}>坏人</option></select></label>`);
+  if (S.myChecks && S.myChecks.length) extra.push(`<div><b>🧜‍♀️ 我的查验结果</b>${S.myChecks.map((c) => `<div>第${c.quest + 1}轮后：${seat(c.id)}号 ${nm(c.id)} 是 <b style="color:${c.evil ? 'var(--evil)' : 'var(--good)'}">${c.evil ? '坏人' : '好人'}</b></div>`).join('')}</div>`);
+  if (S.myExcalSeen) extra.push(`<div><b>🔱 王者之剑</b>：第${S.myExcalSeen.quest + 1}轮你翻转了 ${nm(S.myExcalSeen.id)} 的牌，原来是「${CARD[S.myExcalSeen.card].t}」</div>`);
+  return `<div class="role ${reveal ? 'show ' + (r.evilNow ? 'e' : 'g') : ''}" id="rc">${inner}</div>${extra.length ? `<div class="card" style="font-size:13px">${extra.join('')}<div class="mute">以上信息只有你能看到</div></div>` : ''}
   <div class="card guide"><details ${showGuide ? 'open' : ''} ontoggle="showGuide=this.open"><summary>📖 我的角色怎么玩（展开前确认旁边没人偷看）</summary>
   <p><b>${R.emo} ${R.name}</b>（${R.side === 'good' ? '好人' : '坏人'}）</p><p><b>你知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul></details></div>`;
 }
@@ -152,11 +170,14 @@ function plist(clickable) {
     if (p.id === S.leader && S.phase !== 'end') tags.push('<span class="tag lead">👑队长</span>');
     if (S.team.includes(p.id) && S.phase !== 'propose') tags.push('<span class="tag team">队员</span>');
     if (S.phase === 'vote') tags.push(S.voted.includes(p.id) ? (isGod() ? `<span class="tag ${S.liveVotes[p.id] ? 'ok' : 'evil'}">${S.liveVotes[p.id] ? '同意' : '反对'}</span>` : '<span class="tag ok">已投</span>') : '<span class="tag">思考中</span>');
-    if (S.phase === 'quest' && S.team.includes(p.id)) tags.push(S.questDone.includes(p.id) ? (isGod() ? `<span class="tag ${S.liveCards[p.id] ? 'good' : 'evil'}">${S.liveCards[p.id] ? '成功' : '失败'}</span>` : '<span class="tag">已出牌</span>') : '<span class="tag">执行中</span>');
+    if (S.phase === 'quest' && S.team.includes(p.id)) tags.push(S.questDone.includes(p.id) ? (isGod() ? `<span class="tag ${CARD[S.liveCards[p.id]].c}">${CARD[S.liveCards[p.id]].t}</span>` : '<span class="tag">已出牌</span>') : '<span class="tag">执行中</span>');
     if (S.evilSuggest) { const n = Object.values(S.evilSuggest).filter((x) => x === p.id).length; if (n) tags.push(`<span class="tag evil">🎯×${n}</span>`); }
     if (S.evilTeam && S.evilTeam.includes(p.id) && !S.allRoles) tags.push('<span class="tag evil">坏人</span>');
     if (S.allRoles) { const r = S.allRoles.find((x) => x.id === p.id); tags.push(`<span class="tag ${r.evil ? 'evil' : 'good'}">${ROLES[r.role].emo}${r.name}</span>`); }
     if (S.assassinTarget === p.id) tags.push('<span class="tag evil">🗡️被刺</span>');
+    if (S.lady && S.lady.holder === p.id && S.phase !== 'end') tags.push('<span class="tag good">🧜‍♀️仙女</span>');
+    if (S.excalibur === p.id) tags.push('<span class="tag lead">🔱圣剑</span>');
+    if (S.revealed && S.revealed.includes(p.id) && !S.allRoles) tags.push('<span class="tag evil">📢已暴露·坏人</span>');
     if (!p.online) tags.push('<span class="tag">离线</span>');
     return `<div class="p ${p.online ? '' : 'off'} ${sel.has(p.id) ? 'sel' : ''} ${cur === p.id ? 'speak' : ''}" ${clickable ? `onclick="tog('${p.id}')"` : ''}>
       ${avMark(p, i)}<span>${esc(p.name)}${p.id === S.me ? '<span class="mute">（我）</span>' : ''}<br>${relChips(p.id)}</span><span class="tags">${tags.join('')}</span></div>`;
@@ -165,10 +186,15 @@ function plist(clickable) {
 
 function gameView() {
   const n = S.players.length, iAmLeader = S.leader === S.me, need = S.teamSizes[S.quest];
-  let h = (linkFrom ? `<div class="linkbar" onclick="linkFrom=null;render()">🔗 已选 ${nm(linkFrom)}，点另一个人的头像建立关系（点这里取消）</div>` : '') + roleCard() + questTrack() + speechPanel();
+  let h0 = infoCard();
+  let h = (linkFrom ? `<div class="linkbar" onclick="linkFrom=null;render()">🔗 已选 ${nm(linkFrom)}，点另一个人的头像建立关系（点这里取消）</div>` : '') + roleCard() + questTrack() + h0 + speechPanel();
   if (S.phase === 'propose') {
     h += `<div class="banner">第 ${S.quest + 1} 轮 · 第 ${S.rejects + 1} 次组队 · 队长 ${nm(S.leader)} 选 ${need} 人</div>`;
-    h += `<div class="card">${plist(iAmLeader)}${iAmLeader ? `<button onclick="send({t:'propose',team:[...sel]})" ${sel.size !== need ? 'disabled' : ''}>🚗 发车（${sel.size}/${need}）</button><div class="mute center">点玩家选择队员，可以选自己</div>` : '<div class="mute center" style="margin-top:8px">等队长选人，大家可以开始讨论</div>'}</div>`;
+    const exOpts = [...sel].filter((id) => id !== S.me);
+    if (excalPick && !exOpts.includes(excalPick)) excalPick = null;
+    const exSel = S.settings.excalibur && iAmLeader && sel.size === need ? `<label class="ck">🔱 王者之剑交给 <select style="width:auto" onchange="excalPick=this.value;render()"><option value="">请选择</option>${exOpts.map((id) => `<option value="${id}" ${excalPick === id ? 'selected' : ''}>${seat(id)}号 ${esc(P(id).name)}</option>`).join('')}</select></label>` : '';
+    const canGo = sel.size === need && (!S.settings.excalibur || excalPick);
+    h += `<div class="card">${plist(iAmLeader)}${iAmLeader ? `${exSel}<button onclick="send({t:'propose',team:[...sel],excalibur:excalPick})" ${canGo ? '' : 'disabled'}>🚗 发车（${sel.size}/${need}）</button><div class="mute center">点玩家那一行选队员，可以选自己${S.settings.excalibur ? '；王者之剑不能给自己' : ''}</div>` : '<div class="mute center" style="margin-top:8px">等队长选人，大家可以开始讨论</div>'}</div>`;
   } else if (S.phase === 'vote') {
     h += `<div class="banner">🚗 发车投票：是否同意这支队伍？（${S.voted.length}/${n} 已投）</div><div class="card">${plist(false)}`;
     h += S.myVote === undefined ? (S.me ? `<div class="row"><button class="okb" onclick="send({t:'vote',approve:true})">同意 👍</button><button class="evil" onclick="send({t:'vote',approve:false})">反对 👎</button></div>` : '')
@@ -178,10 +204,23 @@ function gameView() {
   } else if (S.phase === 'quest') {
     const inTeam = S.team.includes(S.me);
     h += `<div class="banner">⚔️ 任务执行中（${S.questDone.length}/${S.team.length}）${S.quest === 3 && S.twoFailQuest4 ? ' · 本轮需要 2 张失败' : ''}</div><div class="card">${plist(false)}`;
-    if (inTeam && !S.myCard) h += S.myRole.evil
-      ? `<div class="row"><button class="good" onclick="qc(true)">成功 ✓</button><button class="evil" onclick="qc(false)">失败 ✗</button></div><div class="mute center">出牌是匿名的，只公布失败的张数</div>`
-      : `<button class="good" onclick="qc(true)">成功 ✓</button><div class="mute center">好人只能出成功</div>`;
+    if (inTeam && !S.myCard) h += `<div class="row">${S.myCards.map((c) => `<button class="${CARD[c].b}" onclick="qc('${c}')">${CARD[c].t} ${CARD[c].e}</button>`).join('')}</div><div class="mute center">${cardHint()}</div>`;
     else h += `<div class="mute center" style="margin-top:8px">${inTeam ? '已出牌，等待其他队员' : '等待队员出牌'}</div>`;
+    h += '</div>';
+  } else if (S.phase === 'excalibur') {
+    const me = S.excalibur === S.me;
+    h += `<div class="banner">🔱 王者之剑：${nm(S.excalibur)} 决定是否翻转一名队员的任务牌</div><div class="card">${plist(false)}`;
+    if (me) h += `<div class="mute">选一名其他队员，把他的牌翻转（成功↔失败，魔法牌不受影响），你会看到他原来出的牌。也可以不用。</div>
+      ${S.team.filter((id) => id !== S.me).map((id) => `<button class="sec" onclick="confirm('翻转 '+P('${id}').name+' 的牌？')&&send({t:'excalibur',id:'${id}'})">翻转 ${seat(id)}号 ${nm(id)}</button>`).join('')}
+      <button onclick="send({t:'excalibur',id:null})">不使用</button>`;
+    else h += `<div class="mute center">等待持剑人决定…</div>`;
+    h += '</div>';
+  } else if (S.phase === 'lady') {
+    const me = S.lady.holder === S.me;
+    h += `<div class="banner">🧜‍♀️ 湖中仙女：${nm(S.lady.holder)} 查验一名玩家的阵营</div><div class="card">${plist(false)}`;
+    if (me) h += `<div class="mute">结果只有你能看到，然后湖中仙女会交给被查的人。不能查拿过湖中仙女的人。</div>
+      ${S.players.filter((p) => !S.lady.used.includes(p.id)).map((p) => `<button class="sec" onclick="confirm('查验 '+P('${p.id}').name+'？')&&send({t:'lady',id:'${p.id}'})">查验 ${seat(p.id)}号 ${nm(p.id)}</button>`).join('')}`;
+    else h += `<div class="mute center">等待湖中仙女持有人查验…</div>`;
     h += '</div>';
   } else if (S.phase === 'assassin') {
     const amA = S.assassin === S.me, amEvil = !!S.evilTeam && S.me && S.evilTeam.includes(S.me);
@@ -200,12 +239,32 @@ function gameView() {
   h += voteMatrix() + notesPanel();
   return h;
 }
-function qc(ok) { if (!ok && !confirm('确定出「失败」？')) return; send({ t: 'quest', success: ok }); }
+const CARD = { S: { t: '成功', e: '✓', b: 'good', c: 'good' }, F: { t: '失败', e: '✗', b: 'evil', c: 'evil' }, M: { t: '魔法', e: '✨', b: 'sec', c: 'lead' } };
+function cardHint() {
+  const r = S.myRole.role, c = S.myCards.join('');
+  if (c === 'SM') return '魔法牌会把本次任务结果反转（两张魔法互相抵消）';
+  if (r === 'lunatic') return '疯子必须出失败';
+  if (r === 'brute' && c === 'S') return '莽夫第 4、5 轮只能出成功';
+  if (c === 'S') return '好人只能出成功';
+  return '出牌是匿名的，只公布各种牌的张数';
+}
+function qc(c) { if (c !== 'S' && !confirm(`确定出「${CARD[c].t}」？`)) return; send({ t: 'quest', card: c }); }
+let excalPick = null;
 function tog(id) {
   const lim = S.phase === 'assassin' ? 1 : S.teamSizes[S.quest];
   if (sel.has(id)) sel.delete(id); else { if (lim === 1) sel.clear(); if (sel.size < lim) sel.add(id); else toast(`最多选 ${lim} 人`); }
   render();
 }
+
+function infoCard() {
+  const bits = [];
+  if (S.rolesInGame) bits.push(`<div><b>本局角色：</b>${S.rolesInGame.map((r) => `${ROLES[r].emo}${ROLES[r].name}`).join('、')}</div>`);
+  if (S.lancelot) bits.push(`<div><b>⚜️ 兰斯洛特（规则${S.lancelot.rule}）：</b>${S.lancelot.rule === 3 ? '不换阵营' : `目前${S.lancelot.swapped ? '<b style="color:var(--evil)">已互换阵营</b>' : '未换阵营'} · 已翻 ${S.lancelot.flips.map((f) => (f.card === 'switch' ? '🔄' : '⏸')).join('') || '无'} · 剩 ${S.lancelot.left} 张`}</div>`);
+  if (S.lady) bits.push(`<div><b>🧜‍♀️ 湖中仙女：</b>在 ${nm(S.lady.holder)} 手里${S.lady.log.length ? ' · ' + S.lady.log.map((l) => `${seat(l.holder)}→${seat(l.target)}`).join('，') : ''}</div>`);
+  if (S.revealed && S.revealed.length) bits.push(`<div style="color:var(--evil)"><b>📢 暴露者公开：</b>${S.revealed.map(nm).join('、')} 是坏人</div>`);
+  return bits.length ? `<div class="card" style="font-size:13px;line-height:1.7"><details ${infoOpen ? 'open' : ''} ontoggle="infoOpen=this.open"><summary>ℹ️ 局面信息</summary>${bits.join('')}</details></div>` : '';
+}
+let infoOpen = true;
 
 // 票型表：每一次发车，谁是队长、谁在车上、谁投了什么
 function voteMatrix() {
@@ -214,7 +273,7 @@ function voteMatrix() {
   const qres = {}; S.history.filter((x) => x.type === 'quest').forEach((x) => (qres[x.quest] = x));
   return `<div class="card"><h3>📊 票型表</h3><div class="mx"><table><tr><th>玩家</th>${votes.map((v) => `<th class="${v.ok ? 'ok' : 'no'}">${v.quest + 1}-${v.attempt}<br>${v.ok ? '通过' : '否决'}</th>`).join('')}</tr>
   ${S.players.map((p) => `<tr><td class="m${marks().m[p.id] || ''}">${MK[marks().m[p.id]] ? MK[marks().m[p.id]].e : ''}${seat(p.id)} ${p.avatar}${esc(p.name)}</td>${votes.map((v) => `<td class="${v.team.includes(p.id) ? 'tm' : ''}">${v.leader === p.id ? '👑' : ''}<span class="${v.votes[p.id] ? 'y' : 'n'}">${v.votes[p.id] ? '✓' : '✗'}</span></td>`).join('')}</tr>`).join('')}
-  <tr><td class="mute">任务</td>${votes.map((v) => { const q = v.ok && qres[v.quest]; return `<td>${q ? (q.success ? '🔵' : '🔴') + q.fails + '败' : ''}</td>`; }).join('')}</tr></table></div>
+  <tr><td class="mute">任务</td>${votes.map((v) => { const q = v.ok && qres[v.quest]; return `<td>${q ? (q.success ? '🔵' : '🔴') + q.fails + '败' + (q.magics ? q.magics + '✨' : '') : ''}</td>`; }).join('')}</tr></table></div>
   <div class="mute">绿色底色 = 在车上的队员 · 👑 = 队长 · ✓同意 ✗反对 · 列名「2-3」= 第2轮第3次组队</div></div>`;
 }
 
@@ -273,7 +332,7 @@ function deductions() {
     }
   }
   const evilN = Object.values(x.m).filter((m) => m === 'evil').length;
-  const total = { 5: 2, 6: 2, 7: 3, 8: 3, 9: 3, 10: 4 }[S.players.length];
+  const total = S.evilTotal;
   if (evilN > total) out.push(`⚠️ 你标了 ${evilN} 个坏人，但本局只有 ${total} 个`);
   return out;
 }
@@ -320,13 +379,20 @@ function maybeEvent() {
     h = `<h3 style="margin:0;color:${e.ok ? 'var(--ok)' : 'var(--evil)'}">发车${e.ok ? '通过 ✅' : '被否决 ❌'}</h3>
     <div class="mute">第 ${e.quest + 1} 轮第 ${e.attempt} 次 · 队长 ${nm(e.leader)}</div><div class="mute" style="margin:6px 0">车上：${e.team.map(nm).join('、')}</div>
     <div class="vcol"><div><h4 style="color:var(--ok)">同意 ${yes.length}</h4>${yes.map((i) => `<div>${nm(i)}</div>`).join('')}</div><div><h4 style="color:var(--evil)">反对 ${no.length}</h4>${no.map((i) => `<div>${nm(i)}</div>`).join('')}</div></div>`;
+  } else if (e.type === 'lancelot') {
+    h = `<h3 style="margin:0">⚜️ 兰斯洛特忠诚牌</h3><div class="cards"><div class="qc ${e.card === 'switch' ? 'f' : 's'}" style="width:110px;font-size:18px">${e.card === 'switch' ? '换阵营' : '不换'}</div></div>
+    <div class="center">${e.card === 'switch' ? '两个兰斯洛特交换阵营！' : '阵营不变'}<br><span class="mute">现在：正义兰斯洛特是${e.swapped ? '坏人' : '好人'}，邪恶兰斯洛特是${e.swapped ? '好人' : '坏人'}</span></div>`;
+  } else if (e.type === 'lady') {
+    h = `<h3 style="margin:0">🧜‍♀️ 湖中仙女</h3><p>${nm(e.holder)} 查验了 ${nm(e.target)}。</p><div class="mute">结果只有查验的人知道，湖中仙女现在交给 ${nm(e.target)}。</div>`;
   } else {
     const cards = Array(e.team.length).fill('s'); for (let i = 0; i < e.fails; i++) cards[cards.length - 1 - i] = 'f';
+    for (let i = 0; i < (e.magics || 0); i++) cards[i] = 'm';
     cards.sort(() => Math.random() - 0.5);
-    h = `<h3 style="margin:0;color:${e.success ? 'var(--good)' : 'var(--evil)'}">第 ${e.quest + 1} 轮任务${e.success ? '成功 🔵' : '失败 🔴'}</h3>
+    const ex = e.excal ? `<div class="mute center">🔱 ${nm(e.excal.holder)} ${e.excal.target ? `用王者之剑翻转了 ${nm(e.excal.target)} 的牌` : '没有使用王者之剑'}</div>` : '';
+    h = ex + `<h3 style="margin:0;color:${e.success ? 'var(--good)' : 'var(--evil)'}">第 ${e.quest + 1} 轮任务${e.success ? '成功 🔵' : '失败 🔴'}</h3>
     <div class="mute" style="margin:6px 0">队员：${e.team.map(nm).join('、')}</div>
-    <div class="cards">${cards.map((c, i) => `<div class="qc ${c}" style="animation-delay:${i * 0.25}s">${c === 's' ? '✓' : '✗'}</div>`).join('')}</div>
-    <div class="center">${e.fails} 张失败${e.need === 2 ? '（本轮需要 2 张失败才算失败）' : ''}</div>`;
+    <div class="cards">${cards.map((c, i) => `<div class="qc ${c === 'm' ? 's' : c}" style="animation-delay:${i * 0.25}s;${c === 'm' ? 'background:#7b4fd6' : ''}">${c === 's' ? '✓' : c === 'f' ? '✗' : '✨'}</div>`).join('')}</div>
+    <div class="center">${e.fails} 张失败${e.magics ? ` · ${e.magics} 张魔法（${e.magics % 2 ? '结果被反转' : '互相抵消'}）` : ''}${e.need === 2 ? '<br>本轮需要 2 张失败才算失败' : ''}</div>`;
   }
   vibrate(100);
   $('#modal').innerHTML = `<div class="modal" onclick="this.remove()"><div class="box">${h}<button class="sec" style="margin-top:12px">知道了</button></div></div>`;
@@ -346,6 +412,8 @@ function godView() {
   ${S.phase === 'vote' ? `<button class="sm sec" onclick="god('forceVote',{approve:true})">未投的人补同意</button><button class="sm sec" onclick="god('forceVote',{approve:false})">未投的人补反对</button>` : ''}
   ${S.phase === 'quest' ? `<button class="sm sec" onclick="god('forceQuest')">未出牌的补成功</button>` : ''}
   ${S.speech ? `<button class="sm sec" onclick="god('speechSkip')">跳过发言人</button><button class="sm sec" onclick="god('speechAdd')">发言 +30 秒</button>` : ''}
+  ${['lady', 'excalibur'].includes(S.phase) ? `<button class="sm sec" onclick="god('skipPhase')">跳过${S.phase === 'lady' ? '湖中仙女' : '王者之剑'}</button>` : ''}
+  ${S.lancelot ? `<button class="sm sec" onclick="god('swapLancelot')">兰斯洛特换阵营</button><span class="mute">剩余忠诚牌：${(S.lancelotDeck || []).map((c) => (c === 'switch' ? '🔄' : '⏸')).join('') || '无'}</span>` : ''}
   <button class="sm sec" onclick="god('toAssassin')">直接进入刺杀</button>
   <button class="sm good" onclick="confirm('判好人胜？')&&god('end',{winner:'good'})">判好人胜</button><button class="sm evil" onclick="confirm('判坏人胜？')&&god('end',{winner:'evil'})">判坏人胜</button>
   <button class="sm sec" onclick="confirm('回到大厅？本局作废')&&god('lobby')">回大厅</button></div></details>
@@ -363,10 +431,25 @@ function rulesView() {
   <p><b>人数配置：</b>5人 3好2坏｜6人 4好2坏｜7人 4好3坏｜8人 5好3坏｜9人 6好3坏｜10人 6好4坏</p>
   <p><b>每轮车上人数：</b>5人 2-3-2-3-3｜6人 2-3-4-3-4｜7人 2-3-3-4-4｜8-10人 3-4-4-5-5</p>
   <p><b>角色：</b></p><ul>${Object.values(ROLES).map((R) => `<li>${R.emo} <b>${R.name}</b>（${R.side === 'good' ? '好' : '坏'}）：${R.know}</li>`).join('')}</ul>
+  <p><b>道具：</b>🧜‍♀️湖中仙女：第 2、3、4 轮任务后，持有人秘密查验一名没拿过的人的阵营，然后交给他。🔱王者之剑：队长发车时交给一名队员（不能给自己），出完牌后他可以翻转另一名队员的牌。⚜️兰斯洛特：一好一坏，翻出「换阵营」忠诚牌时两人互换阵营（规则 1：5 张牌里 2 张换，从第 3 轮起每次组队翻 1 张；规则 2：7 张里 2 张换，抽 5 张，每轮开始翻 1 张；规则 3：不换，但两人互相认识）。✨魔法牌：巫师专用，反转任务结果。</p>
   <p><b>推理标记：</b>点头像标记好坏，长按头像再点另一个人标记同边或互踩。标记只保存在你的手机上。</p>
   <p><b>掉线了？</b>重新打开链接会自动回到房间。换了手机就填原来的昵称 + 重连码（游戏页右上角）。</p>
   </details></div>`;
 }
+
+// ---------- 铃声（Web Audio 合成，无需音频文件） ----------
+let actx = null, lastWarnKey = null, muted = localStorage.muted === '1';
+function unlockAudio() { if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch {} } if (actx && actx.state === 'suspended') actx.resume(); }
+document.addEventListener('touchend', unlockAudio, { passive: true }); document.addEventListener('click', unlockAudio);
+function tone(freq, start, dur, vol) {
+  const o = actx.createOscillator(), g = actx.createGain(); o.type = 'sine'; o.frequency.value = freq;
+  g.gain.setValueAtTime(0, actx.currentTime + start); g.gain.linearRampToValueAtTime(vol, actx.currentTime + start + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + start + dur);
+  o.connect(g).connect(actx.destination); o.start(actx.currentTime + start); o.stop(actx.currentTime + start + dur);
+}
+function bell() { if (muted || !actx) return; [0, 0.35, 0.7].forEach((t) => { tone(880, t, 0.9, 0.35); tone(1320, t, 0.6, 0.12); }); vibrate([200, 100, 200]); }
+function tickSound() { if (muted || !actx) return; tone(660, 0, 0.12, 0.15); }
+function toggleMute() { muted = !muted; localStorage.muted = muted ? '1' : '0'; unlockAudio(); if (!muted) tickSound(); render(); }
 
 // 计时器只刷新数字，不整页重绘
 function tick() {
@@ -375,6 +458,8 @@ function tick() {
     const left = Math.max(0, Math.ceil((+el.dataset.end - now) / 1000));
     el.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
     el.classList.toggle('warn', left <= 10);
+    const key = el.dataset.end + ':' + left; // 最后 5 秒每秒滴一声
+    if (left > 0 && left <= 5 && key !== lastWarnKey) { lastWarnKey = key; tickSound(); }
   });
   document.querySelectorAll('.bar i[data-end]').forEach((el) => { el.style.width = Math.max(0, Math.min(100, ((+el.dataset.end - now) / 1000 / +el.dataset.secs) * 100)) + '%'; });
 }
