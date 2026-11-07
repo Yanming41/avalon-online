@@ -252,6 +252,14 @@ button:hover:not(:disabled){filter:brightness(1.08)}
 .parch .mute{color:#7a6240!important}
 .parch ul li::marker{color:#8a5a1e}
 .parch::after{content:"";position:absolute;left:10%;right:10%;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(120,80,30,.35),transparent)}
+/* 羊皮纸：纸面固定，文字在内层滚动；纸张高度跟随内容（太长才滚动） */
+.lightbox .lbd{flex:0 1 auto!important;min-height:0;overflow:hidden!important;display:flex;flex-direction:column;padding:0!important}
+.lightbox .lbd .lbi{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:18px 20px;min-height:0}
+.lightbox.detail .lbs{flex:0 1 auto;min-height:120px}
+@media (max-width:759px){.lightbox.detail .lbs{max-height:46vh}.lightbox.detail .lbf img{max-height:calc(46vh - 14px)}.lightbox.detail .lbm{justify-content:center}}
+@media (min-width:760px){.lightbox .lbd .lbi{padding:22px 26px}}
+.flip .bk{overflow:hidden!important;padding:0!important}
+.flip .bk .bki{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 9px}
 </style>
 </head>
 <body>
