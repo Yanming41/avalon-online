@@ -129,7 +129,7 @@ function viewFor(room, pid, god) {
   });
   const role = room.roles[pid];
   if (role) {
-    v.myRole = { role, name: ROLE_NAME[role], evil: isEvilRole(role), evilNow: evilNow(room, pid), sees: knowledge(room, pid) };
+    v.myRole = { role, art: g.art[pid] || role, name: ROLE_NAME[role], evil: isEvilRole(role), evilNow: evilNow(room, pid), sees: knowledge(room, pid) };
     if (role === 'trickster') v.myRole.trickShowEvil = !!g.trickShowEvil[pid];
     v.myChecks = g.ladyResults[pid] || [];
     if (g.excalSeen[pid]) v.myExcalSeen = g.excalSeen[pid];
@@ -144,7 +144,7 @@ function viewFor(room, pid, god) {
       v.evilSuggest = g.evilSuggest;
     }
   }
-  if (g.phase === 'end' || god) v.allRoles = room.players.map((p) => ({ id: p.id, role: room.roles[p.id], name: ROLE_NAME[room.roles[p.id]], evil: evilNow(room, p.id) }));
+  if (g.phase === 'end' || god) v.allRoles = room.players.map((p) => ({ id: p.id, role: room.roles[p.id], art: g.art[p.id] || room.roles[p.id], name: ROLE_NAME[room.roles[p.id]], evil: evilNow(room, p.id) }));
   if (g.phase === 'end') Object.assign(v, { winner: g.winner, reason: g.reason, assassinTarget: g.assassinTarget });
   if (god) { v.liveVotes = g.votes; v.liveCards = g.questCards; v.leaderIdx = g.leaderIdx; v.lancelotDeck = g.lancelotDeck; }
   return v;
@@ -206,8 +206,10 @@ function startGame(room) {
     history: [], speech: null, evilSuggest: {}, seq: 0, revealed: [], trickShowEvil: {},
     excalibur: null, excalSeen: {}, ladyResults: {}, ladyLog: [], ladyUsed: [], ladyHolder: null,
     lancelotRule: s.lancelot || 0, lancelotSwapped: false, lancelotFlips: [], lancelotDeck: [],
-    rolesInGame: [...new Set(r.roles)],
+    rolesInGame: [...new Set(r.roles)], art: {},
   };
+  const arts = shuffle(['servant', 'servant_2', 'servant_3', 'servant_4', 'servant_5', 'servant_6']);
+  room.players.filter((p) => room.roles[p.id] === 'servant').forEach((p, i) => { g.art[p.id] = arts[i % arts.length]; });
   if (s.lady) { g.ladyHolder = room.players[(leaderIdx - 1 + n) % n].id; g.ladyUsed = [g.ladyHolder]; } // 首任队长右手边（上家）
   const first = room.players[leaderIdx].id;
   const cleric = room.players.find((p) => room.roles[p.id] === 'cleric');
