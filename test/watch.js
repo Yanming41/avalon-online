@@ -21,7 +21,7 @@ const tx = (c, o) => c.w.send(JSON.stringify(o));
     else if (s.phase === 'vote') cl.forEach((c) => tx(c, { t: 'vote', approve: true }));
     else if (s.phase === 'quest') for (const id of s.team) tx(by(id), { t: 'quest', card: 'S' });
     else if (s.phase === 'lady') { const h = by(s.lady.holder); tx(h, { t: 'lady', id: s.players.find((p) => !s.lady.used.includes(p.id)).id }); }
-    else if (s.phase === 'assassin') { const a = by(s.assassin); tx(a, { t: 'suggest', id: s.players[0].id }); await sleep(60); tx(a, { t: 'assassinate', id: a.s.players.find((p) => !a.s.evilTeam.includes(p.id)).id }); }
+    else if (s.phase === 'assassin') { const a = by(s.assassin); if (!a.s.evilTeam) { await sleep(200); continue; } tx(a, { t: 'suggest', id: s.players[0].id }); await sleep(60); tx(a, { t: 'assassinate', id: a.s.players.find((p) => !a.s.evilTeam.includes(p.id)).id }); }
     await sleep(60);
   }
   const leaked = tv.all.filter((v) => v.phase !== 'end' && (v.myRole || v.allRoles || v.liveVotes || v.evilSuggest || v.evilTeam || v.myPin || v.pins || (v.myChecks && v.myChecks.length)));
