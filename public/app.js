@@ -159,13 +159,13 @@ function plist(clickable) {
     if (S.assassinTarget === p.id) tags.push('<span class="tag evil">🗡️被刺</span>');
     if (!p.online) tags.push('<span class="tag">离线</span>');
     return `<div class="p ${p.online ? '' : 'off'} ${sel.has(p.id) ? 'sel' : ''} ${cur === p.id ? 'speak' : ''}" ${clickable ? `onclick="tog('${p.id}')"` : ''}>
-      <span class="av">${p.avatar}<span class="seat">${i + 1}</span></span>${esc(p.name)}${p.id === S.me ? '<span class="mute">（我）</span>' : ''}<span class="tags">${tags.join('')}</span></div>`;
+      ${avMark(p, i)}<span>${esc(p.name)}${p.id === S.me ? '<span class="mute">（我）</span>' : ''}<br>${relChips(p.id)}</span><span class="tags">${tags.join('')}</span></div>`;
   }).join('')}</div>`;
 }
 
 function gameView() {
   const n = S.players.length, iAmLeader = S.leader === S.me, need = S.teamSizes[S.quest];
-  let h = roleCard() + questTrack() + speechPanel();
+  let h = (linkFrom ? `<div class="linkbar" onclick="linkFrom=null;render()">🔗 已选 ${nm(linkFrom)}，点另一个人的头像建立关系（点这里取消）</div>` : '') + roleCard() + questTrack() + speechPanel();
   if (S.phase === 'propose') {
     h += `<div class="banner">第 ${S.quest + 1} 轮 · 第 ${S.rejects + 1} 次组队 · 队长 ${nm(S.leader)} 选 ${need} 人</div>`;
     h += `<div class="card">${plist(iAmLeader)}${iAmLeader ? `<button onclick="send({t:'propose',team:[...sel]})" ${sel.size !== need ? 'disabled' : ''}>🚗 发车（${sel.size}/${need}）</button><div class="mute center">点玩家选择队员，可以选自己</div>` : '<div class="mute center" style="margin-top:8px">等队长选人，大家可以开始讨论</div>'}</div>`;
@@ -197,7 +197,7 @@ function gameView() {
     h += `<div class="card"><h3>身份揭晓</h3>${plist(false)}</div>`;
     if (S.me === S.hostId || isGod()) h += `<button onclick="${isGod() && S.me !== S.hostId ? "god('start')" : "send({t:'start'})"}">再来一局（重新发身份）</button><button class="sec" onclick="${isGod() && S.me !== S.hostId ? "god('lobby')" : "send({t:'lobby'})"}">回到大厅改配置</button>`;
   }
-  h += voteMatrix();
+  h += voteMatrix() + notesPanel();
   return h;
 }
 function qc(ok) { if (!ok && !confirm('确定出「失败」？')) return; send({ t: 'quest', success: ok }); }
@@ -213,10 +213,101 @@ function voteMatrix() {
   if (!votes.length) return '';
   const qres = {}; S.history.filter((x) => x.type === 'quest').forEach((x) => (qres[x.quest] = x));
   return `<div class="card"><h3>📊 票型表</h3><div class="mx"><table><tr><th>玩家</th>${votes.map((v) => `<th class="${v.ok ? 'ok' : 'no'}">${v.quest + 1}-${v.attempt}<br>${v.ok ? '通过' : '否决'}</th>`).join('')}</tr>
-  ${S.players.map((p) => `<tr><td>${seat(p.id)} ${p.avatar}${esc(p.name)}</td>${votes.map((v) => `<td class="${v.team.includes(p.id) ? 'tm' : ''}">${v.leader === p.id ? '👑' : ''}<span class="${v.votes[p.id] ? 'y' : 'n'}">${v.votes[p.id] ? '✓' : '✗'}</span></td>`).join('')}</tr>`).join('')}
+  ${S.players.map((p) => `<tr><td class="m${marks().m[p.id] || ''}">${MK[marks().m[p.id]] ? MK[marks().m[p.id]].e : ''}${seat(p.id)} ${p.avatar}${esc(p.name)}</td>${votes.map((v) => `<td class="${v.team.includes(p.id) ? 'tm' : ''}">${v.leader === p.id ? '👑' : ''}<span class="${v.votes[p.id] ? 'y' : 'n'}">${v.votes[p.id] ? '✓' : '✗'}</span></td>`).join('')}</tr>`).join('')}
   <tr><td class="mute">任务</td>${votes.map((v) => { const q = v.ok && qres[v.quest]; return `<td>${q ? (q.success ? '🔵' : '🔴') + q.fails + '败' : ''}</td>`; }).join('')}</tr></table></div>
   <div class="mute">绿色底色 = 在车上的队员 · 👑 = 队长 · ✓同意 ✗反对 · 列名「2-3」= 第2轮第3次组队</div></div>`;
 }
+
+// ---------- 推理标记（只存在自己手机上） ----------
+// 点头像：循环标记 好人 → 坏人 → 像梅林 → 存疑 → 清除；长按头像再点另一个人：标记同边 / 互踩
+const MK = { good: { e: '🔵', t: '好人' }, evil: { e: '🔴', t: '坏人' }, merlin: { e: '🧙', t: '像梅林' }, unsure: { e: '❓', t: '存疑' } };
+const MK_ORDER = [undefined, 'good', 'evil', 'merlin', 'unsure'];
+let linkFrom = null, pressT = null, swallowClick = false;
+const mkKey = () => `marks_${S.code}_${S.gameId}`;
+function marks() {
+  if (!S || !S.gameId) return { m: {}, r: [] };
+  try { return JSON.parse(localStorage[mkKey()] || 'null') || { m: {}, r: [] }; } catch { return { m: {}, r: [] }; }
+}
+function saveMarks(x) { localStorage[mkKey()] = JSON.stringify(x); render(); }
+function avMark(p, i) {
+  const m = S.gameId ? marks().m[p.id] : null;
+  return `<span class="av ${m ? 'mk-' + m : ''} ${linkFrom === p.id ? 'linking' : ''}" ${S.gameId ? `data-av="${p.id}"` : ''}>${p.avatar}<span class="seat">${i + 1}</span>${m ? `<span class="mkb">${MK[m].e}</span>` : ''}</span>`;
+}
+function relChips(id) {
+  if (!S.gameId) return '';
+  return marks().r.filter((r) => r.a === id || r.b === id).map((r) => {
+    const o = r.a === id ? r.b : r.a;
+    return `<span class="rel ${r.k}">${r.k === 'same' ? '🔗同边' : '⚔️互踩'} ${seat(o)}号</span>`;
+  }).join('');
+}
+function cycleMark(id) {
+  const x = marks(); const n = MK_ORDER[(MK_ORDER.indexOf(x.m[id]) + 1) % MK_ORDER.length];
+  if (n) x.m[id] = n; else delete x.m[id];
+  saveMarks(x);
+}
+function setRel(a, b, k) {
+  const x = marks(); x.r = x.r.filter((r) => !((r.a === a && r.b === b) || (r.a === b && r.b === a)));
+  if (k) x.r.push({ a, b, k });
+  $('#modal').innerHTML = ''; linkFrom = null; saveMarks(x);
+}
+function askRel(a, b) {
+  linkFrom = null; render();
+  $('#modal').innerHTML = `<div class="modal" onclick="if(event.target===this)this.remove()"><div class="box"><h3 style="margin:0 0 10px">${nm(a)} 和 ${nm(b)} 的关系</h3>
+  <button class="okb" onclick="setRel('${a}','${b}','same')">🔗 同边（一伙的 / 互保）</button>
+  <button class="evil" onclick="setRel('${a}','${b}','opp')">⚔️ 互踩（对立 / 至少一个坏人）</button>
+  <button class="sec" onclick="setRel('${a}','${b}',null)">清除关系</button></div></div>`;
+}
+// 根据关系推一步：同边的人应该同阵营，互踩的人应该不同阵营；发现矛盾就提示
+function deductions() {
+  const x = marks(), out = [];
+  const side = (m) => (m === 'good' || m === 'merlin' ? 'g' : m === 'evil' ? 'e' : null);
+  const word = (s) => (s === 'g' ? '好人' : '坏人'), flip = (s) => (s === 'g' ? 'e' : 'g');
+  for (const r of x.r) {
+    const sa = side(x.m[r.a]), sb = side(x.m[r.b]), A = `${seat(r.a)}号`, B = `${seat(r.b)}号`;
+    if (sa && sb) {
+      if (r.k === 'same' && sa !== sb) out.push(`⚠️ ${A}和${B}标了同边，但一个好一个坏`);
+      if (r.k === 'opp' && sa === sb) out.push(`⚠️ ${A}和${B}标了互踩，但都标成了${word(sa)}`);
+    } else if (sa || sb) {
+      const known = sa || sb, other = sa ? B : A, by = sa ? A : B;
+      out.push(`💡 ${other}和${by}${r.k === 'same' ? '同边' : '互踩'} → ${other}可能是${word(r.k === 'same' ? known : flip(known))}`);
+    }
+  }
+  const evilN = Object.values(x.m).filter((m) => m === 'evil').length;
+  const total = { 5: 2, 6: 2, 7: 3, 8: 3, 9: 3, 10: 4 }[S.players.length];
+  if (evilN > total) out.push(`⚠️ 你标了 ${evilN} 个坏人，但本局只有 ${total} 个`);
+  return out;
+}
+function notesPanel() {
+  if (!S.gameId) return '';
+  const x = marks(), n = Object.keys(x.m).length + x.r.length, d = deductions();
+  return `<div class="card"><h3>🕵️ 我的推理</h3><div class="mute">只保存在你的手机上，别人看不到。<b>点头像</b>循环标记：🔵好人 → 🔴坏人 → 🧙像梅林 → ❓存疑 → 清除；<b>长按头像</b>再点另一个人，可以标记 🔗同边 或 ⚔️互踩。</div>
+  ${d.length ? `<div style="margin-top:8px;font-size:13px;line-height:1.7">${d.map(esc).join('<br>')}</div>` : ''}
+  ${n ? `<button class="sm sec" onclick="if(confirm('清空本局所有标记？')){localStorage.removeItem(mkKey());render()}">清空标记</button>` : ''}</div>`;
+}
+// 头像上的点击 / 长按（捕获阶段拦截，避免同时触发选队员）
+function avDown(e) {
+  const el = e.target.closest && e.target.closest('[data-av]'); if (!el) return;
+  const id = el.dataset.av; clearTimeout(pressT); swallowClick = false;
+  pressT = setTimeout(() => {
+    pressT = null; swallowClick = true; vibrate(40);
+    if (linkFrom && linkFrom !== id) askRel(linkFrom, id); else { linkFrom = id; render(); }
+  }, 450);
+}
+function avCancel() { clearTimeout(pressT); pressT = null; }
+document.addEventListener('touchstart', avDown, { passive: true });
+document.addEventListener('mousedown', avDown);
+document.addEventListener('touchmove', avCancel, { passive: true });
+document.addEventListener('touchend', avCancel);
+document.addEventListener('mouseup', avCancel);
+document.addEventListener('click', (e) => {
+  const el = e.target.closest && e.target.closest('[data-av]'); if (!el) return;
+  e.stopPropagation(); e.preventDefault();
+  if (swallowClick) { swallowClick = false; return; }
+  const id = el.dataset.av;
+  if (linkFrom) { if (linkFrom === id) { linkFrom = null; render(); } else askRel(linkFrom, id); return; }
+  cycleMark(id);
+}, true);
+document.addEventListener('contextmenu', (e) => { if (e.target.closest && e.target.closest('[data-av]')) e.preventDefault(); });
 
 // 投票/任务结果弹窗
 function maybeEvent() {
@@ -272,6 +363,7 @@ function rulesView() {
   <p><b>人数配置：</b>5人 3好2坏｜6人 4好2坏｜7人 4好3坏｜8人 5好3坏｜9人 6好3坏｜10人 6好4坏</p>
   <p><b>每轮车上人数：</b>5人 2-3-2-3-3｜6人 2-3-4-3-4｜7人 2-3-3-4-4｜8-10人 3-4-4-5-5</p>
   <p><b>角色：</b></p><ul>${Object.values(ROLES).map((R) => `<li>${R.emo} <b>${R.name}</b>（${R.side === 'good' ? '好' : '坏'}）：${R.know}</li>`).join('')}</ul>
+  <p><b>推理标记：</b>点头像标记好坏，长按头像再点另一个人标记同边或互踩。标记只保存在你的手机上。</p>
   <p><b>掉线了？</b>重新打开链接会自动回到房间。换了手机就填原来的昵称 + 重连码（游戏页右上角）。</p>
   </details></div>`;
 }

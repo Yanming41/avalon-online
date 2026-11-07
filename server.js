@@ -86,7 +86,7 @@ function viewFor(room, pid, god) {
   Object.assign(v, {
     teamSizes: TEAM_SIZES[n], twoFailQuest4: n >= 7,
     leader: room.players[g.leaderIdx].id, quest: g.quest, results: g.results,
-    rejects: g.rejects, team: g.team, history: g.history, speech: g.speech, lastEvent: g.lastEvent,
+    gameId: g.id, rejects: g.rejects, team: g.team, history: g.history, speech: g.speech, lastEvent: g.lastEvent,
     voted: Object.keys(g.votes), questDone: Object.keys(g.questCards),
   });
   const role = room.roles[pid];
@@ -141,7 +141,7 @@ function startGame(room) {
   room.players = shuffle(room.players); // 随机座位顺序 = 队长轮转顺序
   room.players.forEach((p, i) => { room.roles[p.id] = r.roles[i]; });
   clearTimeout(room.speechTimer);
-  room.game = { phase: 'propose', leaderIdx: crypto.randomInt(n), quest: 0, results: [], rejects: 0, team: [], votes: {}, questCards: {}, history: [], speech: null, evilSuggest: {}, seq: 0 };
+  room.game = { phase: 'propose', leaderIdx: crypto.randomInt(n), quest: 0, results: [], rejects: 0, team: [], votes: {}, questCards: {}, history: [], speech: null, evilSuggest: {}, seq: 0, id: crypto.randomUUID().slice(0, 8) };
 }
 function nextLeader(room) { const g = room.game; g.leaderIdx = (g.leaderIdx + 1) % room.players.length; }
 function endGame(room, winner, reason) { clearSpeech(room); Object.assign(room.game, { phase: 'end', winner, reason }); }

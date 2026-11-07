@@ -33,6 +33,17 @@ const AV = ['🦁','🐺','🦊','🐻','🐼','🐯','🦉'];
   await cdp('Runtime.evaluate', { expression: `localStorage.token='${tag}0';localStorage.name='阿明';localStorage.room='${code}';localStorage.avatar='🦁';sessionStorage.clear()` });
   await cdp('Page.reload'); await sleep(1500);
   await cdp('Runtime.evaluate', { expression: `document.getElementById('modal').innerHTML=''` });
+  // 推理标记交互：点 2 号头像两次（→坏人）、点 3 号一次（→好人）、长按 2 号再点 5 号 → 互踩
+  const center = async (n) => JSON.parse((await cdp('Runtime.evaluate', { expression: `JSON.stringify((()=>{const r=document.querySelectorAll('[data-av]')[${n}].getBoundingClientRect();return [r.x+r.width/2,r.y+r.height/2]})())`, returnByValue: true })).result.value);
+  const mouse = async (type, [x, y]) => cdp('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 });
+  const tap = async (n) => { const c = await center(n); await mouse('mousePressed', c); await mouse('mouseReleased', c); await sleep(150); };
+  const selBefore = (await cdp('Runtime.evaluate', { expression: 'sel.size', returnByValue: true })).result.value;
+  await tap(1); await tap(1); await tap(2);
+  { const c = await center(1); await mouse('mousePressed', c); await sleep(650); await mouse('mouseReleased', c); await sleep(150); }
+  await tap(4); await sleep(150);
+  await cdp('Runtime.evaluate', { expression: `[...document.querySelectorAll('#modal button')].find(b=>b.textContent.includes('互踩')).click()` }); await sleep(200);
+  const st = (await cdp('Runtime.evaluate', { expression: 'JSON.stringify({marks:marks(),sel:sel.size})', returnByValue: true })).result.value;
+  console.log('selBefore', selBefore, 'after', st);
   fs.writeFileSync(OUT + '/player.png', Buffer.from((await cdp('Page.captureScreenshot')).data, 'base64'));
   await cdp('Runtime.evaluate', { expression: `sessionStorage.godPw='test';localStorage.godRoom='${code}';delete localStorage.room` });
   await cdp('Page.reload'); await sleep(1500);
