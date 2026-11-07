@@ -91,7 +91,7 @@ function render() {
 
 function homeView() {
   const code = new URLSearchParams(location.search).get('r') || localStorage.room || '';
-  return `<h1>阿瓦隆</h1><div class="sub">线下面杀 · 手机看身份 · 线上投票</div>
+  return `<h1>阿瓦隆</h1><div class="sub" style="font-family:var(--serif);letter-spacing:3px">卡美洛的忠臣与莫德雷德的爪牙</div>
   <div class="card"><h3>选个头像</h3><div class="avpick">${AVATARS.map((a) => `<span class="${a === myAvatar ? 'on' : ''}" onclick="pickAv('${a}')">${a}</span>`).join('')}</div>
   <input id="nm" placeholder="你的昵称" maxlength="12" value="${esc(pinFor || localStorage.name || '')}">
   <input id="cd" placeholder="房间号（4位）" inputmode="numeric" maxlength="4" value="${esc(code)}">
@@ -103,7 +103,20 @@ function homeView() {
   <div class="card god"><details><summary>👁 上帝模式（裁判 / 调试）</summary>
   <input id="gcd" placeholder="房间号" inputmode="numeric" maxlength="4" value="${esc(code)}"><input id="gpw" type="password" placeholder="上帝密码">
   <button class="sec" onclick="doGod()">以上帝身份进入</button><div class="mute">上帝能看到所有人的身份和实时投票，还可以调整局面。上帝不占玩家位置。</div></details></div>
+  ${codexView()}
   ${rulesView()}`;
+}
+// 首页图鉴：所有角色立绘 + 道具卡，点一下翻面看能力
+function codexView() {
+  const card = (cls, imgSrc, name, back) => `<div class="flip ${cls}" onclick="this.classList.toggle('on')"><div class="in">
+    <div class="fc"><div class="fb">${name.split(' ')[0]}</div><img loading="lazy" src="${imgSrc}" alt="" onerror="this.remove()"><div class="nm2">${name}</div></div>
+    <div class="bk">${back}</div></div></div>`;
+  const roleCard = ([k, R]) => card(R.side === 'good' ? 'g' : 'e', img(k), `${R.emo} ${R.name}`,
+    `<b class="t">${R.emo} ${R.name}</b><span class="side">${R.side === 'good' ? '正义阵营' : '邪恶阵营'}</span><p><b>知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p>`);
+  const roles = Object.entries(ROLES);
+  return `<div class="codex"><h2>⚜ 正义阵营 ⚜<small>点一张牌翻面查看能力</small></h2><div class="fgrid">${roles.filter(([, R]) => R.side === 'good').map(roleCard).join('')}</div>
+  <h2>⚜ 邪恶阵营 ⚜</h2><div class="fgrid">${roles.filter(([, R]) => R.side === 'evil').map(roleCard).join('')}</div>
+  <h2>⚜ 道具与卡牌 ⚜</h2><div class="fgrid">${Object.entries(ITEMS).map(([k, I]) => card('', `img/items/${k}.webp`, `${I.emo} ${I.name}`, `<b class="t">${I.emo} ${I.name}</b><p>${I.desc}</p>`)).join('')}</div></div>`;
 }
 function pickAv(a) { myAvatar = a; localStorage.avatar = a; if (S) send({ t: 'profile', avatar: a }); render(); }
 function getName() { const n = $('#nm').value.trim(); if (!n) { toast('先输入昵称'); return null; } localStorage.name = n; return n; }
