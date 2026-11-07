@@ -154,7 +154,15 @@ function viewFor(room, pid, god) {
 
 function broadcast(room) {
   for (const p of room.players) if (p.ws && !p.ws._god && p.ws.readyState === 1) p.ws.send(JSON.stringify({ t: 'state', s: viewFor(room, p.id) }));
-  for (const ws of room.gods) if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'state', s: viewFor(room, ws._pid || null, true) }));
+  for (const ws of room.gods) {
+    if (ws.readyState !== 1) continue;
+    let v;
+    if (ws._viewAs && room.players.some((p) => p.id === ws._viewAs)) {
+      v = viewFor(room, ws._viewAs, false);
+      Object.assign(v, { god: true, viewAs: ws._viewAs, roster: room.players.map((p) => ({ id: p.id, role: room.roles[p.id] ? ROLE_NAME[room.roles[p.id]] : '' })) });
+    } else { ws._viewAs = null; v = viewFor(room, ws._pid || null, true); }
+    ws.send(JSON.stringify({ t: 'state', s: v }));
+  }
 }
 const err = (ws, m) => ws.send(JSON.stringify({ t: 'error', m }));
 
@@ -386,6 +394,25 @@ function godAction(room, msg, ws) {
     room.players = room.players.filter((x) => x !== p);
     if (room.hostId === p.id && room.players[0]) room.hostId = room.players[0].id;
   } else if (a === 'host' && p) room.hostId = p.id;
+  else if (a === 'addBots') {
+    if (g && g.phase !== 'end') return err(ws, '游戏进行中不能加人');
+    const want = Math.max(1, Math.min(10, parseInt(msg.n) || 5));
+    let k = 1;
+    while (room.players.length < want) {
+      while (room.players.some((x) => x.name === '机器人' + k)) k++;
+      room.players.push({ id: crypto.randomUUID().slice(0, 8), token: 'bot-' + crypto.randomUUID(), name: '机器人' + k, avatar: AVATARS[crypto.randomInt(AVATARS.length)], pin: String(crypto.randomInt(1000, 10000)), bot: true });
+    }
+    if (!room.hostId) room.hostId = room.players[0].id;
+  } else if (a === 'removeBots') {
+    if (g && g.phase !== 'end') return err(ws, '游戏进行中不能移出玩家');
+    room.players = room.players.filter((x) => !x.bot);
+    if (!room.players.some((x) => x.id === room.hostId)) room.hostId = room.players[0] && room.players[0].id;
+  } else if (a === 'viewAs') { ws._viewAs = p ? p.id : null; }
+  else if (a === 'as') { // 以某个玩家的身份操作
+    const id = ws._viewAs; if (!id) return err(ws, '先选择要代入的玩家');
+    if (!msg.msg || ['create', 'join', 'god', 'g'].includes(msg.msg.t)) return;
+    return handle(room, id, msg.msg, ws);
+  }
   else if (a === 'lobby') { clearSpeech(room); room.game = null; room.roles = {}; }
   else if (a === 'start') { const e = startGame(room); if (e) return err(ws, e); }
   else if (a === 'settings') applySettings(room, msg.settings || {});
@@ -425,7 +452,9 @@ function godAction(room, msg, ws) {
 
 // ---------- WebSocket ----------
 const wss = new WebSocketServer({ server });
-wss.on('connection', (ws) => {
+const godFails = new Map(); // ip -> 连续输错次数
+wss.on('connection', (ws, req) => {
+  ws._ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   let room = null, pid = null;
   ws.on('message', (raw) => {
     let msg; try { msg = JSON.parse(raw); } catch { return; }
@@ -467,7 +496,13 @@ wss.on('connection', (ws) => {
       const r = rooms.get(String(msg.code || '').trim());
       if (!r) return err(ws, '房间不存在');
       const h = (x) => crypto.createHash('sha256').update(String(x)).digest('hex');
-      if (!pinOk(h(msg.password), h(GOD_PASSWORD))) return err(ws, '密码错误');
+      const ip = ws._ip, f = godFails.get(ip) || { n: 0, until: 0 };
+      if (f.until > Date.now()) return err(ws, `密码错误次数太多，请 ${Math.ceil((f.until - Date.now()) / 60000)} 分钟后再试`);
+      if (!pinOk(h(msg.password), h(GOD_PASSWORD))) {
+        f.n++; if (f.n >= 5) { f.n = 0; f.until = Date.now() + 10 * 60e3; }
+        godFails.set(ip, f); return err(ws, '密码错误');
+      }
+      godFails.delete(ip);
       if (room && room !== r) room.gods.delete(ws);
       room = r; room.gods.add(ws); ws._god = true; ws._pid = pid;
       ws.send(JSON.stringify({ t: 'godOk', code: r.code }));

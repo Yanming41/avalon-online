@@ -7,7 +7,10 @@ let ws, S = null, sel = new Set(), reveal = false, online = false, clockSkew = 0
 let myAvatar = localStorage.avatar || AVATARS[Math.floor(Math.random() * AVATARS.length)];
 
 function toast(m, ok) { const t = $('#toast'); t.textContent = m; t.style.background = ok ? 'var(--ok)' : 'var(--evil)'; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => (t.style.display = 'none'), 2800); }
-function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); else toast('正在重连，请稍等…'); }
+function send(o) {
+  if (S && S.viewAs && !['g', 'god', 'join', 'create'].includes(o.t)) o = { t: 'g', a: 'as', msg: o };
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); else toast('正在重连，请稍等…');
+}
 const god = (a, extra) => send({ t: 'g', a, ...extra });
 const vibrate = (ms) => navigator.vibrate && navigator.vibrate(ms);
 
@@ -29,7 +32,7 @@ function connect() {
     if (m.t === 'state') {
       const prev = S;
       S = m.s; clockSkew = S.now - Date.now();
-      if (prev && (prev.phase !== S.phase || prev.quest !== S.quest)) sel.clear();
+      if (prev && (prev.phase !== S.phase || prev.quest !== S.quest || prev.viewAs !== S.viewAs)) { sel.clear(); excalPick = null; }
       if (S.phase === 'propose' && S.leader === S.me && (!prev || prev.leader !== S.me || prev.phase !== 'propose')) vibrate([80, 60, 80]);
       if (S.speech && S.speech.order[S.speech.idx] === S.me && (!prev || !prev.speech || prev.speech.idx !== S.speech.idx)) vibrate(200);
       if (prev && prev.gameId === S.gameId && (S.bellSeq || 0) > (prev.bellSeq || 0)) bell();
@@ -56,11 +59,12 @@ function render() {
   if (!S) return (app.innerHTML = homeView());
   const meP = S.players.find((p) => p.id === S.me);
   let h = `<div class="top"><span class="dot ${online ? '' : 'off'}"></span>房间 <b>${S.code}</b>
-    ${meP ? `· ${meP.avatar} ${esc(meP.name)}${S.me === S.hostId ? '（房主）' : ''}` : ''}${isGod() ? ' · <b style="color:#c9a6ff">👁 上帝</b>' : ''}
+    ${meP ? `· ${meP.avatar} ${esc(meP.name)}${S.me === S.hostId ? '（房主）' : ''}` : ''}${isGod() ? (S.viewAs ? ` · <b style="color:#c9a6ff">👁 代入 ${esc(P(S.viewAs).name)}</b>` : ' · <b style="color:#c9a6ff">👁 上帝</b>') : ''}
     <span class="sp"><span onclick="toggleMute()" style="cursor:pointer;font-size:16px">${muted ? '🔇' : '🔔'}</span> ${S.myPin ? `重连码 <b>${S.myPin}</b>` : ''}</span></div>`;
   if (!online) h += `<div class="banner" style="background:#5e1d1d;color:#fff">连接断开，正在自动重连…</div>`;
+  if (isGod()) h += viewAsBar();
   h += S.phase === 'lobby' ? lobbyView() : gameView();
-  if (isGod()) h += godView();
+  if (isGod() && !S.viewAs) h += godView();
   h += rulesView();
   if (meP) h += `<button class="sec" onclick="leave()">离开房间</button>`;
   app.innerHTML = h;
@@ -282,7 +286,7 @@ function voteMatrix() {
 const MK = { good: { e: '🔵', t: '好人' }, evil: { e: '🔴', t: '坏人' }, merlin: { e: '🧙', t: '像梅林' }, unsure: { e: '❓', t: '存疑' } };
 const MK_ORDER = [undefined, 'good', 'evil', 'merlin', 'unsure'];
 let linkFrom = null, pressT = null, swallowClick = false;
-const mkKey = () => `marks_${S.code}_${S.gameId}`;
+const mkKey = () => `marks_${S.code}_${S.gameId}${S.viewAs ? '_' + S.viewAs : ''}`;
 function marks() {
   if (!S || !S.gameId) return { m: {}, r: [] };
   try { return JSON.parse(localStorage[mkKey()] || 'null') || { m: {}, r: [] }; } catch { return { m: {}, r: [] }; }
@@ -396,6 +400,20 @@ function maybeEvent() {
   }
   vibrate(100);
   $('#modal').innerHTML = `<div class="modal" onclick="this.remove()"><div class="box">${h}<button class="sec" style="margin-top:12px">知道了</button></div></div>`;
+}
+
+// ---------- 上帝：多视角测试 ----------
+function viewAsBar() {
+  const list = S.roster || S.players.map((p) => ({ id: p.id, role: S.allRoles ? (S.allRoles.find((r) => r.id === p.id) || {}).name : '' }));
+  return `<div class="card god" style="position:sticky;top:0;z-index:9"><div class="row" style="align-items:center">
+    <select onchange="god('viewAs',{id:this.value||null});reveal=false;sel.clear()"><option value="">👁 上帝视角</option>${list.map((r) => `<option value="${r.id}" ${S.viewAs === r.id ? 'selected' : ''}>${seat(r.id)}号 ${esc(P(r.id).name)}${r.role ? ' · ' + r.role : ''}</option>`).join('')}</select>
+    ${S.viewAs ? `<button class="sm sec" style="flex:none" onclick="stepView(1)">下一个 ▶</button>` : ''}</div>
+    <div class="mute">${S.viewAs ? '你现在看到的就是这个玩家手机上的画面，点按钮等于替他操作。' : '选一个玩家，就能用他的视角看、替他操作，方便一个人测完整局。'}</div>
+    ${S.phase === 'lobby' || S.phase === 'end' ? `<div><button class="sm sec" onclick="god('addBots',{n:+prompt('补满到几人？(5-10)', '7')})">🤖 加机器人凑人数</button><button class="sm sec" onclick="god('removeBots')">移除机器人</button></div>` : ''}</div>`;
+}
+function stepView(d) {
+  const ids = S.players.map((p) => p.id), i = ids.indexOf(S.viewAs);
+  god('viewAs', { id: ids[(i + d + ids.length) % ids.length] }); reveal = false; sel.clear();
 }
 
 // ---------- 上帝面板 ----------
