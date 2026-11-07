@@ -64,7 +64,7 @@ function preload(role) {
 }
 function showRole(k) {
   const R = ROLES[k];
-  $('#modal').innerHTML = `<div class="modal" onclick="if(event.target===this)this.remove()"><div class="box guide"><img class="portrait" src="${img(k)}" alt="" onerror="this.remove()" onclick="zoomImg('${img(k)}','${R.name}')" style="margin:0 auto 10px;max-height:38vh;width:auto;max-width:100%;cursor:zoom-in">
+  $('#modal').innerHTML = `<div class="modal" onclick="if(event.target===this)this.remove()"><div class="box guide"><img class="portrait" src="${img(k)}" alt="" onerror="this.remove()" onclick="showDetail('${k}')" style="margin:0 auto 10px;max-height:38vh;width:auto;max-width:100%;cursor:zoom-in">
   <h3 style="margin:0">${R.emo} ${R.name}（${R.side === 'good' ? '好人' : '坏人'}）</h3><p><b>知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul>
   <button class="sec" onclick="$('#modal').innerHTML=''">关闭</button></div></div>`;
 }
@@ -106,15 +106,15 @@ function homeView() {
 }
 // 首页图鉴：所有角色立绘 + 道具卡，点一下翻面看能力
 function codexView() {
-  const card = (cls, imgSrc, name, back) => `<div class="flip ${cls}" onclick="this.classList.toggle('on')"><div class="in">
-    <div class="fc"><div class="fb">${name.split(' ')[0]}</div><img loading="lazy" src="${imgSrc}" alt="" onerror="this.remove()"><div class="nm2">${name}</div><span class="zoom" onclick="event.stopPropagation();zoomImg('${imgSrc}','${name}')">🔍</span></div>
+  const card = (cls, imgSrc, name, back, key) => `<div class="flip ${cls}" onclick="cardClick(this,'${key}')"><div class="in">
+    <div class="fc"><div class="fb">${name.split(' ')[0]}</div><img loading="lazy" src="${imgSrc}" alt="" onerror="this.remove()"><i class="frm"></i><div class="nm2">${name.replace(/^\S+ /, '')}</div><span class="zoom" onclick="event.stopPropagation();showDetail('${key}')">🔍</span></div>
     <div class="bk">${back}</div></div></div>`;
   const roleCard = ([k, R]) => card(R.side === 'good' ? 'g' : 'e', img(k), `${R.emo} ${R.name}`,
-    `<b class="t">${R.emo} ${R.name}</b><span class="side">${R.side === 'good' ? '正义阵营' : '邪恶阵营'}</span><p><b>知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p>`);
+    `<b class="t">${R.emo} ${R.name}</b><span class="side">${R.side === 'good' ? '正义阵营' : '邪恶阵营'}</span><p><b>知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p>`, k);
   const roles = Object.entries(ROLES);
-  return `<div class="codex"><h2>⚜ 正义阵营 ⚜<small>点一张牌翻面查看能力</small></h2><div class="fgrid">${roles.filter(([, R]) => R.side === 'good').map(roleCard).join('')}</div>
+  return `<div class="codex"><h2>⚜ 正义阵营 ⚜<small>${WIDE() ? '点一张牌查看大图和能力' : '点一张牌翻面查看能力，点 🔍 看大图'}</small></h2><div class="fgrid">${roles.filter(([, R]) => R.side === 'good').map(roleCard).join('')}</div>
   <h2>⚜ 邪恶阵营 ⚜</h2><div class="fgrid">${roles.filter(([, R]) => R.side === 'evil').map(roleCard).join('')}</div>
-  <h2>⚜ 道具与卡牌 ⚜</h2><div class="fgrid">${Object.entries(ITEMS).map(([k, I]) => card('', `img/items/${k}.webp`, `${I.emo} ${I.name}`, `<b class="t">${I.emo} ${I.name}</b><p>${I.desc}</p>`)).join('')}</div></div>`;
+  <h2>⚜ 道具与卡牌 ⚜</h2><div class="fgrid">${Object.entries(ITEMS).map(([k, I]) => card('', `img/items/${k}.webp`, `${I.emo} ${I.name}`, `<b class="t">${I.emo} ${I.name}</b><p>${I.desc}</p>`, 'item:' + k)).join('')}</div></div>`;
 }
 function pickAv(a) { myAvatar = a; localStorage.avatar = a; if (S) send({ t: 'profile', avatar: a }); render(); }
 function getName() { const n = $('#nm').value.trim(); if (!n) { toast('先输入昵称'); return null; } localStorage.name = n; return n; }
@@ -151,7 +151,7 @@ function lobbyView() {
 const PICKS = {
   good: [['merlin', 'merlin', '梅林', 'lock'], ['percival', 'percival', '派西维尔'], ['cleric', 'cleric', '牧师'], ['troublemaker', 'troublemaker', '捣蛋鬼']],
   evil: [['assassin', 'assassin', '刺客', 'lock'], ['morgana', 'morgana', '莫甘娜'], ['mordred', 'mordred', '莫德雷德'], ['oberon', 'oberon', '奥伯伦'], ['lunatic', 'lunatic', '疯子'], ['brute', 'brute', '莽夫'], ['revealer', 'revealer', '暴露者'], ['trickster', 'trickster', '诡术师']],
-  pair: [['sorcerer', 'good_sorcerer', '巫师·一好一坏'], ['lancelot', 'good_lancelot', '兰斯洛特']],
+  pair: [['sorcerer', 'good_sorcerer', '巫师（成对）'], ['lancelot', 'good_lancelot', '兰斯洛特']],
   item: [['lady', 'items/lady', '湖中仙女'], ['excalibur', 'items/excalibur', '王者之剑']],
 };
 const LANCE = ['关闭', '规则1·第3轮起翻牌', '规则2·每轮翻牌', '规则3·不换互认'];
@@ -160,12 +160,12 @@ function pickGrid(host) {
   const st = S.settings;
   const card = ([k, pic, name, lock], side) => {
     const on = lock || (k === 'lancelot' ? st.lancelot > 0 : !!st[k]);
-    const cap = k === 'lancelot' ? `${name}<br><small>${LANCE[st.lancelot || 0]}</small>` : name;
+    const cap = k === 'lancelot' ? `${name}</div><div class="rule">${LANCE[st.lancelot || 0]}` : name;
     const R = ROLES[pic] || {};
     return `<div class="pick ${side} ${on ? 'on' : ''} ${lock ? 'lock' : ''} ${host && !lock ? 'can' : ''}" ${host && !lock ? `onclick="togPick('${k}')"` : ''}>
-      <div class="fb">${R.emo || (ITEMS[pic.replace('items/', '')] || {}).emo || ''}</div><img loading="lazy" src="${picSrc(pic)}" alt="" onerror="this.remove()">
+      <div class="fb">${R.emo || (ITEMS[pic.replace('items/', '')] || {}).emo || ''}</div><img loading="lazy" src="${picSrc(pic)}" alt="" onerror="this.remove()"><i class="frm"></i>
       <div class="cap">${cap}</div>${lock ? '<span class="lk">必选</span>' : on ? '<span class="lk ok">✓</span>' : ''}
-      <span class="zoom" onclick="event.stopPropagation();zoomImg('${picSrc(pic)}','${esc(name)}')">🔍</span></div>`;
+      <span class="zoom" onclick="event.stopPropagation();showDetail('${pic.startsWith('items/') ? 'item:' + pic.slice(6) : pic}')">🔍</span></div>`;
   };
   return `<div class="pgh">正义阵营</div><div class="pgrid">${PICKS.good.map((c) => card(c, 'g')).join('')}</div>
   <div class="pgh">邪恶阵营</div><div class="pgrid">${PICKS.evil.map((c) => card(c, 'e')).join('')}</div>
@@ -179,10 +179,25 @@ function togPick(k) {
 }
 
 // ---------- 立绘放大浏览（点一下放大到原尺寸，可拖动；再点一下或点 ✕ 关闭） ----------
-function zoomImg(src, title) {
+const WIDE = () => matchMedia('(hover: hover) and (pointer: fine)').matches && innerWidth >= 700; // 电脑
+function cardClick(el, key) { if (WIDE()) showDetail(key); else el.classList.toggle('on'); }
+function detailHtml(key) {
+  if (key.startsWith('item:')) { const I = ITEMS[key.slice(5)]; return `<h3>${I.emo} ${I.name}</h3><p>${I.desc}</p>`; }
+  const R = ROLES[key]; if (!R) return '';
+  return `<h3>${R.emo} ${R.name}</h3><div class="side ${R.side}">${R.side === 'good' ? '正义阵营' : '邪恶阵营'}</div>
+    <p><b>你知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p><p><b>玩法建议：</b></p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul>`;
+}
+function showDetail(key) {
+  const src = key.startsWith('item:') ? `img/items/${key.slice(5)}.webp` : img(key);
+  const name = key.startsWith('item:') ? ITEMS[key.slice(5)].name : ROLES[key].name;
+  zoomImg(src, name, detailHtml(key));
+}
+function zoomImg(src, title, html) {
   const el = document.createElement('div');
   el.className = 'lightbox';
-  el.innerHTML = `<div class="lbx" onclick="event.stopPropagation();this.parentNode.remove()">✕</div><div class="lbs"><img src="${src}" alt=""></div><div class="lbt">${title || ''}<br><small>点图片放大 / 缩小，放大后可拖动</small></div>`;
+  if (html) el.classList.add('detail');
+  el.innerHTML = `<div class="lbx" onclick="event.stopPropagation();this.parentNode.remove()">✕</div><div class="lbm"><div class="lbs"><div class="lbf"><img src="${src}" alt="" onerror="this.parentNode.classList.add('noimg')"><i class="frm plain"></i></div></div>
+    ${html ? `<div class="lbd" onclick="event.stopPropagation()">${html}<div class="mute" style="margin-top:10px">点图片放大细节 · 点空白处关闭</div></div>` : `<div class="lbt">${title || ''}<br><small>点图片放大 / 缩小，放大后可拖动</small></div>`}</div>`;
   const im = el.querySelector('img'), sc = el.querySelector('.lbs');
   im.onclick = (e) => {
     e.stopPropagation();
@@ -217,9 +232,9 @@ function roleCard() {
   if (S.myChecks && S.myChecks.length) extra.push(`<div><b>🧜‍♀️ 我的查验结果</b>${S.myChecks.map((c) => `<div>第${c.quest + 1}轮后：${seat(c.id)}号 ${nm(c.id)} 是 <b style="color:${c.evil ? 'var(--evil)' : 'var(--good)'}">${c.evil ? '坏人' : '好人'}</b></div>`).join('')}</div>`);
   if (S.myExcalSeen) extra.push(`<div><b>🔱 王者之剑</b>：第${S.myExcalSeen.quest + 1}轮你翻转了 ${nm(S.myExcalSeen.id)} 的牌，原来是「${CARD[S.myExcalSeen.card].t}」</div>`);
   const bg = reveal && IMG_OK[r.role] ? ` style="background:url(${img(r.role)})"` : '';
-  return `<div class="role ${reveal ? 'show ' + (r.evilNow ? 'e' : 'g') + (IMG_OK[r.role] ? '' : ' noimg') : ''}" id="rc"${bg}>${inner}</div>${extra.length ? `<div class="card" style="font-size:13px">${extra.join('')}<div class="mute">以上信息只有你能看到</div></div>` : ''}
+  return `<div class="role ${reveal ? 'show ' + (r.evilNow ? 'e' : 'g') + (IMG_OK[r.role] ? '' : ' noimg') : ''}" id="rc"${bg}>${inner}<i class="frm plain"></i></div>${extra.length ? `<div class="card" style="font-size:13px">${extra.join('')}<div class="mute">以上信息只有你能看到</div></div>` : ''}
   <div class="card guide"><details ${showGuide ? 'open' : ''} ontoggle="showGuide=this.open"><summary>📖 我的角色怎么玩（展开前确认旁边没人偷看）</summary>
-  ${IMG_OK[r.role] ? `<img class="gp" src="${img(r.role)}" alt="" onclick="zoomImg('${img(r.role)}','${R.name}')">` : ''}<p><b>${R.emo} ${R.name}</b>（${R.side === 'good' ? '好人' : '坏人'}）</p><p><b>你知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul></details></div>`;
+  ${IMG_OK[r.role] ? `<img class="gp" src="${img(r.role)}" alt="" onclick="showDetail('${r.role}')">` : ''}<p><b>${R.emo} ${R.name}</b>（${R.side === 'good' ? '好人' : '坏人'}）</p><p><b>你知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul></details></div>`;
 }
 
 function questTrack() {
@@ -310,7 +325,7 @@ function gameView() {
     h += '</div>';
   } else if (S.phase === 'end') {
     h += `<div class="banner" style="background:${S.winner === 'good' ? 'var(--good)' : 'var(--evil)'};color:#fff;font-size:20px">${S.winner === 'good' ? '🏆 正义阵营获胜' : '😈 邪恶阵营获胜'}<div style="font-size:14px;font-weight:400">${esc(S.reason)}</div></div>`;
-    h += `<div class="card"><h3>身份揭晓</h3><div class="gallery">${S.allRoles.map((r) => `<div class="gi ${r.evil ? 'e' : 'g'} ${S.assassinTarget === r.id ? 'dead' : ''}" onclick="zoomImg('${img(r.role)}','${esc(P(r.id).name)} · ${r.name}')"><img class="portrait" src="${img(r.role)}" alt="" onerror="this.style.visibility='hidden'"><div class="cap">${seat(r.id)}号 ${nm(r.id)}<br><b style="color:${r.evil ? '#ff8a85' : '#9cc3ff'}">${r.name}</b>${S.assassinTarget === r.id ? ' 🗡️' : ''}</div></div>`).join('')}</div></div>
+    h += `<div class="card"><h3>身份揭晓</h3><div class="gallery">${S.allRoles.map((r) => `<div class="gi ${r.evil ? 'e' : 'g'} ${S.assassinTarget === r.id ? 'dead' : ''}" onclick="showDetail('${r.role}')"><img class="portrait" src="${img(r.role)}" alt="" onerror="this.style.visibility='hidden'"><i class="frm"></i><div class="cap">${seat(r.id)}号 ${nm(r.id)}<br><b style="color:${r.evil ? '#ff8a85' : '#9cc3ff'}">${r.name}</b>${S.assassinTarget === r.id ? ' 🗡️' : ''}</div></div>`).join('')}</div></div>
     <div class="card">${plist(false)}</div>`;
     if (S.me === S.hostId || isGod()) h += `<button onclick="${isGod() && S.me !== S.hostId ? "god('start')" : "send({t:'start'})"}">再来一局（重新发身份）</button><button class="sec" onclick="${isGod() && S.me !== S.hostId ? "god('lobby')" : "send({t:'lobby'})"}">回到大厅改配置</button>`;
   }
@@ -558,7 +573,7 @@ function godView() {
 }
 
 function rulesView() {
-  return `${S ? `<div class="card"><details><summary>🖼️ 角色图鉴</summary><div class="gallery" style="margin-top:8px">${Object.entries(ROLES).map(([k, R]) => `<div class="gi ${R.side === 'good' ? 'g' : 'e'}" onclick="showRole('${k}')"><img class="portrait" loading="lazy" src="${img(k)}" alt="" onerror="this.style.visibility='hidden'"><div class="cap">${R.emo} ${R.name}</div></div>`).join('')}</div></details></div>` : ''}
+  return `${S ? `<div class="card"><details><summary>🖼️ 角色图鉴</summary><div class="gallery" style="margin-top:8px">${Object.entries(ROLES).map(([k, R]) => `<div class="gi ${R.side === 'good' ? 'g' : 'e'}" onclick="showDetail('${k}')"><img class="portrait" loading="lazy" src="${img(k)}" alt="" onerror="this.style.visibility='hidden'"><i class="frm"></i><div class="cap">${R.emo} ${R.name}</div></div>`).join('')}</div></details></div>` : ''}
   <div class="card rules"><details><summary>📜 规则速查</summary>
   <p><b>胜负：</b>好人完成 3 次任务，并且最后梅林没被刺中，好人赢。任务失败 3 次、连续 5 次组队被否决、或者刺客刺中梅林，坏人赢。</p>
   <ol><li><b>组队（发车）：</b>队长按本轮人数选队员（可以选自己）。发车前可以开启「轮流发言」，每人限时发言。</li>
