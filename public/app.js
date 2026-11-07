@@ -36,6 +36,7 @@ function connect() {
       if (S.phase === 'propose' && S.leader === S.me && (!prev || prev.leader !== S.me || prev.phase !== 'propose')) vibrate([80, 60, 80]);
       if (S.speech && S.speech.order[S.speech.idx] === S.me && (!prev || !prev.speech || prev.speech.idx !== S.speech.idx)) vibrate(200);
       if (prev && prev.gameId === S.gameId && (S.bellSeq || 0) > (prev.bellSeq || 0)) bell();
+      if (S.myRole) preload(S.myRole.role);
       render(); maybeEvent();
     }
     if (m.t === 'error') {
@@ -52,6 +53,21 @@ const P = (id) => S.players.find((p) => p.id === id) || { name: '?', avatar: '�
 const nm = (id) => `${P(id).avatar}${esc(P(id).name)}`;
 const seat = (id) => S.players.findIndex((p) => p.id === id) + 1;
 const isGod = () => S && S.god;
+
+// ---------- 角色立绘 ----------
+const img = (role) => `img/roles/${role}.webp`;
+const IMG_OK = {}; // 已加载成功的立绘（没加载好就退回 emoji 卡面）
+function preload(role) {
+  if (!role || role in IMG_OK) return;
+  IMG_OK[role] = false;
+  const im = new Image(); im.onload = () => { IMG_OK[role] = true; if (reveal) render(); }; im.src = img(role);
+}
+function showRole(k) {
+  const R = ROLES[k];
+  $('#modal').innerHTML = `<div class="modal" onclick="if(event.target===this)this.remove()"><div class="box guide"><img class="portrait" src="${img(k)}" alt="" onerror="this.remove()" style="margin-bottom:10px">
+  <h3 style="margin:0">${R.emo} ${R.name}（${R.side === 'good' ? '好人' : '坏人'}）</h3><p><b>知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul>
+  <button class="sec" onclick="$('#modal').innerHTML=''">关闭</button></div></div>`;
+}
 
 // ---------- 渲染 ----------
 function render() {
@@ -136,17 +152,18 @@ function roleCard() {
   const r = S.myRole; if (!r) return '';
   const R = ROLES[r.role];
   const inner = reveal
-    ? `<div class="emo">${R.emo}</div><div class="nm" style="color:${r.evilNow ? '#ff8a85' : '#9cc3ff'}">${r.name}</div><div>${r.evilNow ? '邪恶阵营' : '正义阵营'}${r.evil !== r.evilNow ? '（已换阵营！）' : ''}</div>
+    ? `<div class="ov"><div class="emo" style="font-size:30px">${R.emo}</div><div class="nm" style="color:${r.evilNow ? '#ff8a85' : '#9cc3ff'}">${r.name}</div><div>${r.evilNow ? '邪恶阵营' : '正义阵营'}${r.evil !== r.evilNow ? '（已换阵营！）' : ''}</div>
        <div class="mute" style="margin-top:6px">${R.know}</div>
-       ${r.sees.length ? `<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap;justify-content:center">${r.sees.map((x) => `<span class="tag ${r.evil ? 'evil' : 'good'}">${seat(x.id)}号 ${nm(x.id)} · ${x.tag}</span>`).join('')}</div>` : ''}`
+       ${r.sees.length ? `<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap;justify-content:center">${r.sees.map((x) => `<span class="tag ${r.evil ? 'evil' : 'good'}">${seat(x.id)}号 ${nm(x.id)} · ${x.tag}</span>`).join('')}</div>` : ''}</div>`
     : `<div class="emo">🂠</div><div class="nm">按住查看身份</div><div class="mute">松手就隐藏，注意别让旁边的人看到</div>`;
   const extra = [];
   if (r.role === 'trickster') extra.push(`<label class="ck">🃏 被查验时显示为 <select style="width:auto" onchange="send({t:'trickShow',evil:this.value==='1'})"><option value="0" ${r.trickShowEvil ? '' : 'selected'}>好人</option><option value="1" ${r.trickShowEvil ? 'selected' : ''}>坏人</option></select></label>`);
   if (S.myChecks && S.myChecks.length) extra.push(`<div><b>🧜‍♀️ 我的查验结果</b>${S.myChecks.map((c) => `<div>第${c.quest + 1}轮后：${seat(c.id)}号 ${nm(c.id)} 是 <b style="color:${c.evil ? 'var(--evil)' : 'var(--good)'}">${c.evil ? '坏人' : '好人'}</b></div>`).join('')}</div>`);
   if (S.myExcalSeen) extra.push(`<div><b>🔱 王者之剑</b>：第${S.myExcalSeen.quest + 1}轮你翻转了 ${nm(S.myExcalSeen.id)} 的牌，原来是「${CARD[S.myExcalSeen.card].t}」</div>`);
-  return `<div class="role ${reveal ? 'show ' + (r.evilNow ? 'e' : 'g') : ''}" id="rc">${inner}</div>${extra.length ? `<div class="card" style="font-size:13px">${extra.join('')}<div class="mute">以上信息只有你能看到</div></div>` : ''}
+  const bg = reveal && IMG_OK[r.role] ? ` style="background:url(${img(r.role)})"` : '';
+  return `<div class="role ${reveal ? 'show ' + (r.evilNow ? 'e' : 'g') + (IMG_OK[r.role] ? '' : ' noimg') : ''}" id="rc"${bg}>${inner}</div>${extra.length ? `<div class="card" style="font-size:13px">${extra.join('')}<div class="mute">以上信息只有你能看到</div></div>` : ''}
   <div class="card guide"><details ${showGuide ? 'open' : ''} ontoggle="showGuide=this.open"><summary>📖 我的角色怎么玩（展开前确认旁边没人偷看）</summary>
-  <p><b>${R.emo} ${R.name}</b>（${R.side === 'good' ? '好人' : '坏人'}）</p><p><b>你知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul></details></div>`;
+  ${IMG_OK[r.role] ? `<img class="gp" src="${img(r.role)}" alt="">` : ''}<p><b>${R.emo} ${R.name}</b>（${R.side === 'good' ? '好人' : '坏人'}）</p><p><b>你知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul></details></div>`;
 }
 
 function questTrack() {
@@ -237,7 +254,8 @@ function gameView() {
     h += '</div>';
   } else if (S.phase === 'end') {
     h += `<div class="banner" style="background:${S.winner === 'good' ? 'var(--good)' : 'var(--evil)'};color:#fff;font-size:20px">${S.winner === 'good' ? '🏆 正义阵营获胜' : '😈 邪恶阵营获胜'}<div style="font-size:14px;font-weight:400">${esc(S.reason)}</div></div>`;
-    h += `<div class="card"><h3>身份揭晓</h3>${plist(false)}</div>`;
+    h += `<div class="card"><h3>身份揭晓</h3><div class="gallery">${S.allRoles.map((r) => `<div class="gi ${r.evil ? 'e' : 'g'} ${S.assassinTarget === r.id ? 'dead' : ''}"><img class="portrait" src="${img(r.role)}" alt="" onerror="this.style.visibility='hidden'"><div class="cap">${seat(r.id)}号 ${nm(r.id)}<br><b style="color:${r.evil ? '#ff8a85' : '#9cc3ff'}">${r.name}</b>${S.assassinTarget === r.id ? ' 🗡️' : ''}</div></div>`).join('')}</div></div>
+    <div class="card">${plist(false)}</div>`;
     if (S.me === S.hostId || isGod()) h += `<button onclick="${isGod() && S.me !== S.hostId ? "god('start')" : "send({t:'start'})"}">再来一局（重新发身份）</button><button class="sec" onclick="${isGod() && S.me !== S.hostId ? "god('lobby')" : "send({t:'lobby'})"}">回到大厅改配置</button>`;
   }
   h += voteMatrix() + notesPanel();
@@ -440,7 +458,8 @@ function godView() {
 }
 
 function rulesView() {
-  return `<div class="card rules"><details><summary>📜 规则速查</summary>
+  return `<div class="card"><details><summary>🖼️ 角色图鉴</summary><div class="gallery" style="margin-top:8px">${Object.entries(ROLES).map(([k, R]) => `<div class="gi ${R.side === 'good' ? 'g' : 'e'}" onclick="showRole('${k}')"><img class="portrait" loading="lazy" src="${img(k)}" alt="" onerror="this.style.visibility='hidden'"><div class="cap">${R.emo} ${R.name}</div></div>`).join('')}</div></details></div>
+  <div class="card rules"><details><summary>📜 规则速查</summary>
   <p><b>胜负：</b>好人完成 3 次任务，并且最后梅林没被刺中，好人赢。任务失败 3 次、连续 5 次组队被否决、或者刺客刺中梅林，坏人赢。</p>
   <ol><li><b>组队（发车）：</b>队长按本轮人数选队员（可以选自己）。发车前可以开启「轮流发言」，每人限时发言。</li>
   <li><b>发车投票：</b>所有人投同意或反对，全员投完后一起公布，记入票型表。超过半数同意才算通过；否则下一位当队长，否决计数 +1。</li>
