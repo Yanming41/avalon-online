@@ -154,6 +154,8 @@ function viewFor(room, pid, god) {
 
 function broadcast(room) {
   for (const p of room.players) if (p.ws && !p.ws._god && p.ws.readyState === 1) p.ws.send(JSON.stringify({ t: 'state', s: viewFor(room, p.id) }));
+  // 观战 / 投屏：只拿公开信息（等同于一个没有身份的旁观者）
+  if (room.watchers.size) { const pub = JSON.stringify({ t: 'state', s: { ...viewFor(room, null, false), watch: true } }); for (const w of room.watchers) if (w.readyState === 1) w.send(pub); }
   for (const ws of room.gods) {
     if (ws.readyState !== 1) continue;
     let v;
@@ -464,7 +466,7 @@ wss.on('connection', (ws, req) => {
       const avatar = AVATARS.includes(msg.avatar) ? msg.avatar : AVATARS[crypto.randomInt(AVATARS.length)];
       if (!name || !token) return err(ws, '请输入昵称');
       if (msg.t === 'create') {
-        room = { code: newCode(), players: [], roles: {}, game: null, gods: new Set(), settings: { ...DEFAULT_SETTINGS }, touched: Date.now() };
+        room = { code: newCode(), players: [], roles: {}, game: null, gods: new Set(), watchers: new Set(), settings: { ...DEFAULT_SETTINGS }, touched: Date.now() };
         rooms.set(room.code, room);
       } else {
         room = rooms.get(String(msg.code || '').trim());
@@ -489,6 +491,13 @@ wss.on('connection', (ws, req) => {
       p.ws = ws; pid = p.id;
       if (!room.hostId || !room.players.some((x) => x.id === room.hostId)) room.hostId = p.id;
       ws.send(JSON.stringify({ t: 'joined', code: room.code }));
+      return broadcast(room);
+    }
+    if (msg.t === 'watch') {
+      const r = rooms.get(String(msg.code || '').trim());
+      if (!r) return err(ws, '房间不存在');
+      if (room && room !== r) { room.watchers.delete(ws); room.gods.delete(ws); }
+      room = r; room.watchers.add(ws);
       return broadcast(room);
     }
     if (msg.t === 'god') {
@@ -516,7 +525,7 @@ wss.on('connection', (ws, req) => {
   });
   ws.on('close', () => {
     if (!room) return;
-    room.gods.delete(ws);
+    room.gods.delete(ws); room.watchers.delete(ws);
     const p = room.players.find((x) => x.id === pid);
     if (p && p.ws === ws) p.ws = null;
     broadcast(room);

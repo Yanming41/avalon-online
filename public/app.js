@@ -21,6 +21,7 @@ function connect() {
     online = true;
     if (localStorage.room && localStorage.name) send({ t: 'join', code: localStorage.room, name: localStorage.name, avatar: myAvatar, token });
     if (localStorage.godRoom && sessionStorage.godPw) send({ t: 'god', code: localStorage.godRoom, password: sessionStorage.godPw });
+    if (WATCH) send({ t: 'watch', code: WATCH });
     render();
   };
   ws.onmessage = (e) => {
@@ -72,6 +73,7 @@ function showRole(k) {
 // ---------- 渲染 ----------
 function render() {
   const app = $('#app');
+  if (WATCH) return (app.innerHTML = tvView());
   if (!S) return (app.innerHTML = homeView());
   const meP = S.players.find((p) => p.id === S.me);
   let h = `<div class="top"><span class="dot ${online ? '' : 'off'}"></span>房间 <b>${S.code}</b>
@@ -96,6 +98,8 @@ function homeView() {
   ${pinFor ? `<input id="pin" placeholder="重连码（游戏页右上角的4位数）" inputmode="numeric" maxlength="4"><div class="mute">掉线换了设备？填原来的昵称和重连码就能回到原来的位置，身份不会变。忘了重连码可以找上帝或者看原来的手机。</div>` : ''}
   <button onclick="doJoin()">${pinFor ? '恢复连接' : '加入房间'}</button>
   ${pinFor ? '' : '<button class="sec" onclick="doCreate()">创建新房间</button>'}</div>
+  <div class="card"><details><summary>📺 观战 / 投屏大屏</summary><input id="wcd" placeholder="房间号" inputmode="numeric" maxlength="4" value="${esc(code)}">
+  <button class="sec" onclick="const c=$('#wcd').value.trim();/^\d{4}$/.test(c)?location.href='/?watch='+c:toast('房间号是 4 位数字')">打开观战页</button><div class="mute">只显示公开信息（任务进度、队长、发车票型、发言计时等），适合投到电视上。不占玩家位置。</div></details></div>
   <div class="card god"><details><summary>👁 上帝模式（裁判 / 调试）</summary>
   <input id="gcd" placeholder="房间号" inputmode="numeric" maxlength="4" value="${esc(code)}"><input id="gpw" type="password" placeholder="上帝密码">
   <button class="sec" onclick="doGod()">以上帝身份进入</button><div class="mute">上帝能看到所有人的身份和实时投票，还可以调整局面。上帝不占玩家位置。</div></details></div>
@@ -311,11 +315,11 @@ function marks() {
 }
 function saveMarks(x) { localStorage[mkKey()] = JSON.stringify(x); render(); }
 function avMark(p, i) {
-  const m = S.gameId ? marks().m[p.id] : null;
-  return `<span class="av ${m ? 'mk-' + m : ''} ${linkFrom === p.id ? 'linking' : ''}" ${S.gameId ? `data-av="${p.id}"` : ''}>${p.avatar}<span class="seat">${i + 1}</span>${m ? `<span class="mkb">${MK[m].e}</span>` : ''}</span>`;
+  const m = S.gameId && !WATCH ? marks().m[p.id] : null;
+  return `<span class="av ${m ? 'mk-' + m : ''} ${linkFrom === p.id ? 'linking' : ''}" ${S.gameId && !WATCH ? `data-av="${p.id}"` : ''}>${p.avatar}<span class="seat">${i + 1}</span>${m ? `<span class="mkb">${MK[m].e}</span>` : ''}</span>`;
 }
 function relChips(id) {
-  if (!S.gameId) return '';
+  if (!S.gameId || WATCH) return '';
   return marks().r.filter((r) => r.a === id || r.b === id).map((r) => {
     const o = r.a === id ? r.b : r.a;
     return `<span class="rel ${r.k}">${r.k === 'same' ? '🔗同边' : '⚔️互踩'} ${seat(o)}号</span>`;
@@ -418,6 +422,50 @@ function maybeEvent() {
   }
   vibrate(100);
   $('#modal').innerHTML = `<div class="modal" onclick="this.remove()"><div class="box">${h}<button class="sec" style="margin-top:12px">知道了</button></div></div>`;
+  if (WATCH) { clearTimeout(maybeEvent._t); maybeEvent._t = setTimeout(() => { $('#modal').innerHTML = ''; }, 10000); }
+}
+
+// ---------- 观战 / 投屏大屏 ----------
+const WATCH = new URLSearchParams(location.search).get('watch');
+if (WATCH) document.body.classList.add('tv');
+function tvView() {
+  if (!S) return `<h1>阿瓦隆 · 观战</h1><div class="banner">${online ? `正在进入房间 ${esc(WATCH)}…` : '连接中…'}</div>`;
+  const joinUrl = location.origin + '/?r=' + S.code;
+  const head = `<div class="tvtitle"><h1>阿瓦隆</h1><span class="code">${S.code}</span><span class="tvjoin">手机打开 <b>${esc(location.host)}</b> 输入房间号加入</span><span class="sp" style="margin-left:auto"><span class="dot ${online ? '' : 'off'}" style="display:inline-block"></span> <span onclick="toggleMute()" style="cursor:pointer;font-size:28px">${muted ? '🔇' : '🔔'}</span></span></div>`;
+  if (S.phase === 'lobby') {
+    return head + `<div class="tvgrid"><div class="card"><h3>玩家 ${S.players.length}/10</h3><div class="players">${S.players.map((p) => `<div class="p ${p.online ? '' : 'off'}"><span class="av">${p.avatar}</span>${esc(p.name)}${p.id === S.hostId ? ' <span class="tag lead">房主</span>' : ''}</div>`).join('')}</div></div>
+    <div><div class="card center"><div class="mute" style="font-size:22px">手机打开下面的网址加入</div><div class="code" style="font-size:90px">${S.code}</div><div style="font-size:22px">${esc(joinUrl)}</div></div>
+    <div class="card"><h3>本局配置</h3><div style="font-size:20px;line-height:1.8">${lobbyRoleList()}</div></div></div></div>`;
+  }
+  const n = S.players.length, need = S.teamSizes[S.quest];
+  let banner = '';
+  if (S.phase === 'propose') banner = `第 ${S.quest + 1} 轮 · 第 ${S.rejects + 1} 次组队 · 👑 ${nm(S.leader)} 选 ${need} 人`;
+  else if (S.phase === 'vote') banner = `🚗 发车投票中（${S.voted.length}/${n} 已投）`;
+  else if (S.phase === 'quest') banner = `⚔️ 任务执行中（${S.questDone.length}/${S.team.length}）${S.quest === 3 && S.twoFailQuest4 ? ' · 需要 2 张失败' : ''}`;
+  else if (S.phase === 'excalibur') banner = `🔱 ${nm(S.excalibur)} 正在决定是否使用王者之剑`;
+  else if (S.phase === 'lady') banner = `🧜‍♀️ ${nm(S.lady.holder)} 正在使用湖中仙女`;
+  else if (S.phase === 'assassin') banner = `🗡️ 刺杀环节：好人完成 3 次任务，刺客 ${nm(S.assassin)} 正在寻找梅林`;
+  else if (S.phase === 'end') banner = `${S.winner === 'good' ? '🏆 正义阵营获胜' : '😈 邪恶阵营获胜'} · ${esc(S.reason)}`;
+  const bstyle = S.phase === 'end' ? `background:${S.winner === 'good' ? 'var(--good)' : 'var(--evil)'};color:#fff` : S.phase === 'assassin' ? 'background:#5e1d1d;color:#fff' : '';
+  let left = `<div class="banner" style="${bstyle}">${banner}</div>` + questTrack();
+  if (S.speech) {
+    const sp = S.speech, cur = sp.order[sp.idx], nxt = sp.order[sp.idx + 1];
+    left += `<div class="card" style="border-color:var(--ok)"><div class="speech"><span class="av" style="font-size:56px;width:84px;height:84px">${P(cur).avatar}</span>
+      <div style="flex:1"><div style="font-size:30px"><b>${seat(cur)}号 ${esc(P(cur).name)}</b> 发言中</div><div class="mute" style="font-size:18px">${sp.idx + 1}/${sp.order.length}${nxt ? ` · 下一位 ${nm(nxt)}` : ' · 最后一位'}</div></div>
+      <div class="timer" data-end="${sp.endsAt}">--</div></div><div class="bar" style="height:10px"><i data-end="${sp.endsAt}" data-secs="${sp.secs}"></i></div></div>`;
+  }
+  if (S.phase === 'end') left += `<div class="card"><h3>身份揭晓</h3><div class="gallery" style="grid-template-columns:repeat(5,1fr)">${S.allRoles.map((r) => `<div class="gi ${r.evil ? 'e' : 'g'} ${S.assassinTarget === r.id ? 'dead' : ''}"><img class="portrait" src="${img(r.role)}" alt="" onerror="this.style.visibility='hidden'"><div class="cap" style="font-size:15px">${seat(r.id)}号 ${nm(r.id)}<br><b style="color:${r.evil ? '#ff8a85' : '#9cc3ff'}">${r.name}</b></div></div>`).join('')}</div></div>`;
+  else left += `<div class="card">${plist(false)}</div>`;
+  const right = infoCard() + voteMatrix();
+  return head + `<div class="tvgrid"><div>${left}</div><div>${right}</div></div>`;
+}
+function lobbyRoleList() {
+  const st = S.settings, on = Object.keys(ROLES).filter((k) => st[k]);
+  const names = ['🧙梅林', '🗡️刺客', ...on.map((k) => ROLES[k].emo + ROLES[k].name)];
+  if (st.sorcerer) names.push('✨巫师（一好一坏）');
+  if (st.lancelot) names.push(`⚜️兰斯洛特（规则${st.lancelot}）`);
+  if (st.lady) names.push('🧜‍♀️湖中仙女'); if (st.excalibur) names.push('🔱王者之剑');
+  return names.join('　') + `<div class="mute">每人发言 ${st.speechSecs} 秒</div>`;
 }
 
 // ---------- 上帝：多视角测试 ----------
