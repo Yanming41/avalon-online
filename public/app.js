@@ -65,7 +65,7 @@ function preload(role) {
 }
 function showRole(k) {
   const R = ROLES[k];
-  $('#modal').innerHTML = `<div class="modal" onclick="if(event.target===this)this.remove()"><div class="box guide"><img class="portrait" src="${img(k)}" alt="" onerror="this.remove()" style="margin-bottom:10px">
+  $('#modal').innerHTML = `<div class="modal" onclick="if(event.target===this)this.remove()"><div class="box guide"><img class="portrait" src="${img(k)}" alt="" onerror="this.remove()" style="margin:0 auto 10px;max-height:38vh;width:auto;max-width:100%">
   <h3 style="margin:0">${R.emo} ${R.name}（${R.side === 'good' ? '好人' : '坏人'}）</h3><p><b>知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul>
   <button class="sec" onclick="$('#modal').innerHTML=''">关闭</button></div></div>`;
 }
@@ -519,7 +519,7 @@ function godView() {
 }
 
 function rulesView() {
-  return `<div class="card"><details><summary>🖼️ 角色图鉴</summary><div class="gallery" style="margin-top:8px">${Object.entries(ROLES).map(([k, R]) => `<div class="gi ${R.side === 'good' ? 'g' : 'e'}" onclick="showRole('${k}')"><img class="portrait" loading="lazy" src="${img(k)}" alt="" onerror="this.style.visibility='hidden'"><div class="cap">${R.emo} ${R.name}</div></div>`).join('')}</div></details></div>
+  return `${S ? `<div class="card"><details><summary>🖼️ 角色图鉴</summary><div class="gallery" style="margin-top:8px">${Object.entries(ROLES).map(([k, R]) => `<div class="gi ${R.side === 'good' ? 'g' : 'e'}" onclick="showRole('${k}')"><img class="portrait" loading="lazy" src="${img(k)}" alt="" onerror="this.style.visibility='hidden'"><div class="cap">${R.emo} ${R.name}</div></div>`).join('')}</div></details></div>` : ''}
   <div class="card rules"><details><summary>📜 规则速查</summary>
   <p><b>胜负：</b>好人完成 3 次任务，并且最后梅林没被刺中，好人赢。任务失败 3 次、连续 5 次组队被否决、或者刺客刺中梅林，坏人赢。</p>
   <ol><li><b>组队（发车）：</b>队长按本轮人数选队员（可以选自己）。发车前可以开启「轮流发言」，每人限时发言。</li>
