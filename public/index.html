@@ -3,195 +3,84 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#14121c">
 <title>阿瓦隆 · 在线助手</title>
 <style>
-:root{--bg:#14121c;--card:#221f2e;--line:#3a3550;--gold:#e0b45a;--good:#4f8fe8;--evil:#d9534f;--txt:#ece8f5;--mute:#9a93ad}
+:root{--bg:#14121c;--card:#221f2e;--line:#3a3550;--gold:#e0b45a;--good:#4f8fe8;--evil:#d9534f;--ok:#3fa565;--txt:#ece8f5;--mute:#9a93ad}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:radial-gradient(circle at 50% -20%,#2c2540,var(--bg) 60%);color:var(--txt);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh}
-main{max-width:480px;margin:0 auto;padding:16px 14px 80px}
-h1{font-family:serif;color:var(--gold);text-align:center;letter-spacing:6px;margin:18px 0 4px}
-.sub{text-align:center;color:var(--mute);font-size:13px;margin-bottom:18px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0}
-.card h3{margin:0 0 10px;font-size:15px;color:var(--gold)}
-input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:#16141f;color:var(--txt);font-size:16px;margin:6px 0}
-button{width:100%;padding:13px;border:0;border-radius:10px;font-size:16px;font-weight:600;background:var(--gold);color:#241b06;margin:6px 0;cursor:pointer}
-button.sec{background:#34304a;color:var(--txt)}button.good{background:var(--good);color:#fff}button.evil{background:var(--evil);color:#fff}
+body{margin:0;background:radial-gradient(circle at 50% -20%,#2c2540,var(--bg) 60%) fixed;color:var(--txt);font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh}
+main{max-width:520px;margin:0 auto;padding:10px 12px 90px}
+h1{font-family:serif;color:var(--gold);text-align:center;letter-spacing:6px;margin:16px 0 4px}
+.sub{text-align:center;color:var(--mute);font-size:13px;margin-bottom:14px}
+.top{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mute);padding:6px 2px}
+.top b{color:var(--gold)}.top .dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}.top .dot.off{background:var(--evil)}
+.top .sp{margin-left:auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0}
+.card h3{margin:0 0 8px;font-size:15px;color:var(--gold)}
+input,select{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:#16141f;color:var(--txt);font-size:16px;margin:5px 0}
+button{width:100%;padding:13px;border:0;border-radius:10px;font-size:16px;font-weight:600;background:var(--gold);color:#241b06;margin:5px 0;cursor:pointer;transition:transform .08s}
+button:active{transform:scale(.97)}
+button.sec{background:#34304a;color:var(--txt)}button.good{background:var(--good);color:#fff}button.evil{background:var(--evil);color:#fff}button.okb{background:var(--ok);color:#fff}
+button.sm{width:auto;padding:7px 11px;font-size:13px;margin:3px 2px}
 button:disabled{opacity:.4}
 .row{display:flex;gap:8px}.row>*{flex:1}
 .players{display:flex;flex-direction:column;gap:6px}
-.p{display:flex;align-items:center;gap:8px;padding:10px;border-radius:10px;background:#1a1825;border:1px solid transparent}
-.p.sel{border-color:var(--gold);background:#2b2615}.p.off{opacity:.45}
+.p{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:#1a1825;border:2px solid transparent;transition:background .15s}
+.p.sel{border-color:var(--gold);background:#2b2615}.p.off{opacity:.45}.p.speak{border-color:var(--ok)}
+.av{font-size:24px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:#2c2840;border-radius:50%;flex:none;position:relative}
+.av .seat{position:absolute;bottom:-4px;right:-4px;font-size:10px;background:#000a;border-radius:8px;padding:0 4px;color:var(--mute)}
 .p .tags{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
-.tag{font-size:11px;padding:2px 7px;border-radius:20px;background:#34304a}
-.tag.lead{background:var(--gold);color:#241b06}.tag.team{background:#2f5d3a}.tag.evil{background:var(--evil)}.tag.good{background:var(--good)}
+.tag{font-size:11px;padding:2px 7px;border-radius:20px;background:#34304a;white-space:nowrap}
+.tag.lead{background:var(--gold);color:#241b06}.tag.team{background:#2f5d3a}.tag.evil{background:var(--evil)}.tag.good{background:var(--good)}.tag.ok{background:var(--ok)}
 .quests{display:flex;justify-content:space-between;gap:6px}
 .q{flex:1;aspect-ratio:1;border-radius:50%;border:2px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:18px;font-weight:700}
 .q small{font-size:10px;font-weight:400;color:var(--mute)}
-.q.cur{border-color:var(--gold)}.q.ok{background:var(--good);border-color:var(--good)}.q.fail{background:var(--evil);border-color:var(--evil)}
-.rej{display:flex;gap:6px;justify-content:center;margin-top:10px}.rej i{width:14px;height:14px;border-radius:50%;border:1px solid var(--mute)}.rej i.on{background:var(--evil);border-color:var(--evil)}
-.role{height:230px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none;background:repeating-linear-gradient(45deg,#272238,#272238 10px,#2d2842 10px,#2d2842 20px);border:2px solid var(--gold);text-align:center;padding:12px}
+.q.cur{border-color:var(--gold);box-shadow:0 0 12px #e0b45a55}.q.ok{background:var(--good);border-color:var(--good)}.q.fail{background:var(--evil);border-color:var(--evil)}
+.q.ok small,.q.fail small{color:#fffc}
+.rej{display:flex;gap:6px;justify-content:center;margin-top:8px;align-items:center;font-size:12px;color:var(--mute)}.rej i{width:13px;height:13px;border-radius:50%;border:1px solid var(--mute)}.rej i.on{background:var(--evil);border-color:var(--evil)}
+.role{min-height:200px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;background:repeating-linear-gradient(45deg,#272238,#272238 10px,#2d2842 10px,#2d2842 20px);border:2px solid var(--gold);text-align:center;padding:12px}
 .role.show.g{background:linear-gradient(160deg,#1d3560,#122040)}.role.show.e{background:linear-gradient(160deg,#5e1d1d,#2e0f0f)}
-.role .emo{font-size:60px}.role .nm{font-size:26px;font-weight:800;font-family:serif;margin:6px 0}
+.role .emo{font-size:56px}.role .nm{font-size:26px;font-weight:800;font-family:serif;margin:4px 0}
 .mute{color:var(--mute);font-size:13px}.center{text-align:center}
-.banner{padding:12px;border-radius:12px;text-align:center;font-weight:700;margin:10px 0;background:#2b2615;color:var(--gold)}
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--evil);color:#fff;padding:10px 16px;border-radius:10px;display:none;z-index:9}
-label.ck{display:flex;align-items:center;gap:8px;padding:6px 0}label.ck input{width:auto;margin:0}
+.banner{padding:11px;border-radius:12px;text-align:center;font-weight:700;margin:10px 0;background:#2b2615;color:var(--gold)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--evil);color:#fff;padding:10px 16px;border-radius:10px;display:none;z-index:30;max-width:90vw}
+label.ck{display:flex;align-items:center;gap:8px;padding:5px 0}label.ck input{width:auto;margin:0}
 details summary{cursor:pointer;color:var(--gold)}
-.hist div{font-size:13px;padding:6px 0;border-bottom:1px solid var(--line)}
 .code{font-size:40px;letter-spacing:10px;text-align:center;font-weight:800;color:var(--gold)}
 .rules p,.rules li{font-size:14px;line-height:1.6}
+.avpick{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:6px 0}
+.avpick span{font-size:26px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#1a1825;border:2px solid transparent;cursor:pointer}
+.avpick span.on{border-color:var(--gold);background:#2b2615}
+/* 票型表 */
+.mx{overflow-x:auto}.mx table{border-collapse:collapse;font-size:13px;min-width:100%}
+.mx th,.mx td{padding:5px 4px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap}
+.mx th{color:var(--mute);font-weight:400;font-size:11px}.mx td:first-child,.mx th:first-child{text-align:left;position:sticky;left:0;background:var(--card)}
+.mx td.tm{background:#2f5d3a55}.mx .y{color:#7ee09b}.mx .n{color:#ff8a85}.mx th.ok{color:var(--ok)}.mx th.no{color:var(--evil)}
+/* 发言计时 */
+.speech{display:flex;align-items:center;gap:10px}
+.timer{font-size:28px;font-weight:800;font-variant-numeric:tabular-nums;min-width:72px;text-align:center}
+.timer.warn{color:var(--evil);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.5}}
+.bar{height:6px;border-radius:3px;background:#34304a;overflow:hidden;margin-top:8px}.bar i{display:block;height:100%;background:var(--ok);transition:width 1s linear}
+/* 弹窗 */
+.modal{position:fixed;inset:0;background:#000b;display:flex;align-items:center;justify-content:center;z-index:20;padding:16px;animation:fade .2s}
+.modal .box{background:var(--card);border:1px solid var(--gold);border-radius:16px;padding:16px;width:100%;max-width:420px;max-height:85vh;overflow:auto}
+@keyframes fade{from{opacity:0}}
+.cards{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:12px 0}
+.qc{width:54px;height:76px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:28px;animation:flip .5s backwards}
+.qc.s{background:var(--good)}.qc.f{background:var(--evil)}
+@keyframes flip{from{transform:rotateY(90deg)}}
+.vcol{display:flex;gap:10px}.vcol>div{flex:1;background:#1a1825;border-radius:10px;padding:8px}
+.vcol h4{margin:0 0 6px;font-size:14px}
+.god{border-color:#a06bff}.god h3{color:#c9a6ff}
+.guide li{font-size:13px;line-height:1.6;margin:2px 0}
 </style>
 </head>
 <body>
 <main id="app"></main>
+<div id="modal"></div>
 <div class="toast" id="toast"></div>
-<script>
-const $ = (s) => document.querySelector(s);
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const token = localStorage.token || (localStorage.token = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now());
-let ws, S = null, sel = new Set(), reveal = false;
-const EMO = { merlin: '🧙', percival: '🛡️', servant: '⚔️', assassin: '🗡️', morgana: '🔮', mordred: '👑', oberon: '🌑', minion: '💀' };
-
-function toast(m) { const t = $('#toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => (t.style.display = 'none'), 2500); }
-function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); else toast('连接中，请稍等'); }
-
-function connect() {
-  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  ws.onopen = () => { if (localStorage.room && localStorage.name) send({ t: 'join', code: localStorage.room, name: localStorage.name, token }); };
-  ws.onmessage = (e) => {
-    const m = JSON.parse(e.data);
-    if (m.t === 'joined') { localStorage.room = m.code; history.replaceState(null, '', '?r=' + m.code); }
-    if (m.t === 'state') { if (S && S.phase !== m.s.phase) sel.clear(); S = m.s; render(); }
-    if (m.t === 'error') { toast(m.m); if (m.m === '房间不存在') { delete localStorage.room; S = null; render(); } }
-  };
-  ws.onclose = () => setTimeout(connect, 1500);
-}
-
-const nameOf = (id) => (S.players.find((p) => p.id === id) || {}).name || '?';
-
-function render() {
-  const app = $('#app');
-  if (!S) return (app.innerHTML = homeView());
-  let h = `<h1>阿瓦隆</h1><div class="sub">房间 <b style="color:var(--gold)">${S.code}</b> · 我是 ${esc(nameOf(S.me))}${S.me === S.hostId ? '（房主）' : ''}</div>`;
-  if (S.phase === 'lobby') h += lobbyView();
-  else h += gameView();
-  h += rulesView();
-  app.innerHTML = h;
-}
-
-function homeView() {
-  const code = new URLSearchParams(location.search).get('r') || '';
-  return `<h1>阿瓦隆</h1><div class="sub">线下面杀 · 手机看身份 · 线上投票</div>
-  <div class="card"><input id="nm" placeholder="你的昵称" maxlength="12" value="${esc(localStorage.name || '')}">
-  <input id="cd" placeholder="房间号（4位）" inputmode="numeric" maxlength="4" value="${esc(code)}">
-  <button onclick="doJoin()">加入房间</button><button class="sec" onclick="doCreate()">创建新房间</button></div>${rulesView()}`;
-}
-function getName() { const n = $('#nm').value.trim(); if (!n) { toast('先输入昵称'); return null; } localStorage.name = n; return n; }
-function doCreate() { const n = getName(); if (n) send({ t: 'create', name: n, token }); }
-function doJoin() { const n = getName(); const c = $('#cd').value.trim(); if (!n) return; if (!/^\d{4}$/.test(c)) return toast('房间号是4位数字'); send({ t: 'join', code: c, name: n, token }); }
-function leave() { if (!confirm('确定离开房间？')) return; delete localStorage.room; S = null; history.replaceState(null, '', '/'); ws.close(); }
-
-function lobbyView() {
-  const host = S.me === S.hostId, st = S.settings, n = S.players.length;
-  const ck = (k, label) => `<label class="ck"><input type="checkbox" ${st[k] ? 'checked' : ''} ${host ? '' : 'disabled'} onchange="send({t:'settings',settings:{${k}:this.checked}})">${label}</label>`;
-  return `<div class="card center"><div class="mute">把房间号告诉大家，或者分享链接</div><div class="code">${S.code}</div>
-    <button class="sec" onclick="share()">复制邀请链接</button></div>
-  <div class="card"><h3>玩家 ${n}/10（5人开局）</h3><div class="players">${S.players.map((p) => `<div class="p ${p.online ? '' : 'off'}">${esc(p.name)}<span class="tags">${p.id === S.hostId ? '<span class="tag lead">房主</span>' : ''}${host && p.id !== S.me ? `<span class="tag" onclick="send({t:'kick',id:'${p.id}'})">移出</span>` : ''}</span></div>`).join('')}</div></div>
-  <div class="card"><h3>角色配置</h3><div class="mute">梅林、刺客必有；其余位置自动补忠臣/爪牙</div>
-    ${ck('percival', '🛡️ 派西维尔（好）')}${ck('morgana', '🔮 莫甘娜（坏）')}${ck('mordred', '👑 莫德雷德（坏）')}${ck('oberon', '🌑 奥伯伦（坏）')}</div>
-  ${host ? `<button onclick="send({t:'start'})" ${n < 5 ? 'disabled' : ''}>开始游戏 · 发身份</button>` : '<div class="banner">等待房主开始</div>'}
-  <button class="sec" onclick="leave()">离开房间</button>`;
-}
-function share() { const u = location.origin + '/?r=' + S.code; navigator.clipboard ? navigator.clipboard.writeText(u).then(() => toast('已复制：' + u)) : prompt('复制链接', u); }
-
-function roleCard() {
-  const r = S.myRole; if (!r) return '';
-  const inner = reveal
-    ? `<div class="emo">${EMO[r.role]}</div><div class="nm" style="color:${r.evil ? '#ff8a85' : '#9cc3ff'}">${r.name}</div><div>${r.evil ? '邪恶阵营' : '正义阵营'}</div>
-       <div class="mute" style="margin-top:6px">${r.hint}</div>
-       ${r.sees.length ? `<div style="margin-top:8px">${r.sees.map((x) => `<span class="tag ${r.evil ? 'evil' : 'good'}">${esc(nameOf(x.id))} · ${x.tag}</span>`).join(' ')}</div>` : ''}`
-    : `<div class="emo">🂠</div><div class="nm">按住查看身份</div><div class="mute">松手隐藏，注意别让旁边的人看到</div>`;
-  return `<div class="role ${reveal ? 'show ' + (r.evil ? 'e' : 'g') : ''}" id="rc">${inner}</div>`;
-}
-
-function gameView() {
-  const n = S.players.length, iAmLeader = S.leader === S.me, need = S.teamSizes[S.quest];
-  let h = roleCard();
-  // 任务进度
-  h += `<div class="card"><div class="quests">${S.teamSizes.map((sz, i) => {
-    const r = S.results[i];
-    return `<div class="q ${r ? (r.success ? 'ok' : 'fail') : i === S.quest && S.phase !== 'end' ? 'cur' : ''}">${r ? (r.success ? '✓' : '✗') : sz}<small>${r ? (r.fails ? r.fails + '失败' : '') : i === 3 && S.twoFailQuest4 ? '需2败' : '人'}</small></div>`;
-  }).join('')}</div><div class="rej">${[0, 1, 2, 3, 4].map((i) => `<i class="${i < S.rejects ? 'on' : ''}"></i>`).join('')}</div>
-  <div class="mute center" style="margin-top:4px">连续否决 ${S.rejects}/5</div></div>`;
-
-  const plist = (clickable) => `<div class="players">${S.players.map((p) => {
-    const vote = S.phase === 'vote' && S.voted.includes(p.id) ? '<span class="tag">已投</span>' : '';
-    const qd = S.phase === 'quest' && S.team.includes(p.id) ? `<span class="tag">${S.questDone.includes(p.id) ? '已出牌' : '执行中'}</span>` : '';
-    const role = S.allRoles ? (() => { const r = S.allRoles.find((x) => x.id === p.id); return `<span class="tag ${r.evil ? 'evil' : 'good'}">${EMO[r.role]} ${r.name}</span>`; })() : '';
-    return `<div class="p ${p.online ? '' : 'off'} ${sel.has(p.id) ? 'sel' : ''}" ${clickable ? `onclick="tog('${p.id}')"` : ''}>${esc(p.name)}${p.id === S.me ? '（我）' : ''}
-      <span class="tags">${p.id === S.leader && S.phase !== 'end' ? '<span class="tag lead">👑队长</span>' : ''}${S.team.includes(p.id) && S.phase !== 'propose' ? '<span class="tag team">队员</span>' : ''}${vote}${qd}${role}${S.assassinTarget === p.id ? '<span class="tag evil">被刺</span>' : ''}</span></div>`;
-  }).join('')}</div>`;
-
-  if (S.phase === 'propose') {
-    h += `<div class="banner">第 ${S.quest + 1} 轮任务 · 队长 ${esc(nameOf(S.leader))} 选 ${need} 人</div>`;
-    h += `<div class="card">${plist(iAmLeader)}${iAmLeader ? `<button onclick="send({t:'propose',team:[...sel]})" ${sel.size !== need ? 'disabled' : ''}>提交队伍（${sel.size}/${need}）</button>` : '<div class="mute center" style="margin-top:8px">等待队长选人，大家可以开始讨论</div>'}</div>`;
-  } else if (S.phase === 'vote') {
-    h += `<div class="banner">投票：是否同意这支队伍？（${S.voted.length}/${n}）</div><div class="card">${plist(false)}`;
-    h += S.myVote === undefined ? `<div class="row"><button class="good" onclick="send({t:'vote',approve:true})">同意 👍</button><button class="evil" onclick="send({t:'vote',approve:false})">反对 👎</button></div>`
-      : `<div class="mute center" style="margin-top:8px">你投了「${S.myVote ? '同意' : '反对'}」，等其他人…</div>`;
-    h += '</div>';
-  } else if (S.phase === 'quest') {
-    const inTeam = S.team.includes(S.me);
-    h += `<div class="banner">任务执行中（${S.questDone.length}/${S.team.length}）</div><div class="card">${plist(false)}`;
-    if (inTeam && !S.myCard) h += S.myRole.evil
-      ? `<div class="row"><button class="good" onclick="send({t:'quest',success:true})">成功 ✓</button><button class="evil" onclick="send({t:'quest',success:false})">失败 ✗</button></div>`
-      : `<button class="good" onclick="send({t:'quest',success:true})">成功 ✓</button><div class="mute center">好人只能出成功</div>`;
-    else h += `<div class="mute center" style="margin-top:8px">${inTeam ? '已出牌，等待其他队员' : '等待队员出牌'}</div>`;
-    h += '</div>';
-  } else if (S.phase === 'assassin') {
-    const me = S.assassin === S.me;
-    h += `<div class="banner">好人完成 3 次任务！刺客 ${esc(nameOf(S.assassin))} 正在寻找梅林</div><div class="card">${plist(me)}`;
-    if (me) h += `<button class="evil" onclick="if(${'sel.size'}===1&&confirm('确定刺杀 '+nameOf([...sel][0])+'？'))send({t:'assassinate',id:[...sel][0]})" ${sel.size !== 1 ? 'disabled' : ''}>刺杀</button>`;
-    h += '</div>';
-  } else if (S.phase === 'end') {
-    h += `<div class="banner" style="background:${S.winner === 'good' ? 'var(--good)' : 'var(--evil)'};color:#fff;font-size:20px">${S.winner === 'good' ? '🏆 正义阵营获胜' : '😈 邪恶阵营获胜'}<div style="font-size:14px;font-weight:400">${S.reason}</div></div>`;
-    h += `<div class="card"><h3>身份揭晓</h3>${plist(false)}</div>`;
-    if (S.me === S.hostId) h += `<button onclick="send({t:'start'})">再来一局（重新发身份）</button><button class="sec" onclick="send({t:'lobby'})">回到大厅改配置</button>`;
-  }
-  // 历史
-  if (S.history.length) h += `<div class="card"><details><summary>记录（${S.history.length}）</summary><div class="hist">${S.history.slice().reverse().map((x) => x.type === 'vote'
-    ? `<div>第${x.quest + 1}轮 · 队长${esc(nameOf(x.leader))} 提名 ${x.team.map((i) => esc(nameOf(i))).join('、')} → <b style="color:${x.ok ? 'var(--good)' : 'var(--evil)'}">${x.ok ? '通过' : '否决'}</b><br><span class="mute">同意：${Object.keys(x.votes).filter((k) => x.votes[k]).map((i) => esc(nameOf(i))).join('、') || '无'}；反对：${Object.keys(x.votes).filter((k) => !x.votes[k]).map((i) => esc(nameOf(i))).join('、') || '无'}</span></div>`
-    : `<div>第${x.quest + 1}轮任务 <b style="color:${x.success ? 'var(--good)' : 'var(--evil)'}">${x.success ? '成功' : '失败'}</b>（${x.fails} 张失败）</div>`).join('')}</div></details></div>`;
-  return h;
-}
-function tog(id) {
-  const lim = S.phase === 'assassin' ? 1 : S.teamSizes[S.quest];
-  if (sel.has(id)) sel.delete(id); else { if (lim === 1) sel.clear(); if (sel.size < lim) sel.add(id); }
-  render();
-}
-
-function rulesView() {
-  return `<div class="card rules"><details><summary>📜 规则速查</summary>
-  <p><b>阵营：</b>好人要完成 3 次任务；坏人要让 3 次任务失败，或让组队连续被否决 5 次。</p>
-  <ol><li><b>组队：</b>队长按人数选队员（可以选自己），全员讨论。</li>
-  <li><b>投票：</b>所有人公开投同意/反对，超过半数同意才算通过；否则队长顺延到下一位。</li>
-  <li><b>任务：</b>队员秘密出牌，好人只能出成功，坏人可以出成功或失败。出现 1 张失败，任务就失败（7 人以上的第 4 轮需要 2 张）。</li>
-  <li><b>刺杀：</b>好人完成 3 次任务后，刺客猜梅林是谁，猜中则坏人翻盘。</li></ol>
-  <p><b>人数配置：</b>5人 3好2坏｜6人 4好2坏｜7人 4好3坏｜8人 5好3坏｜9人 6好3坏｜10人 6好4坏</p>
-  <p><b>角色：</b>🧙梅林 能看到坏人（看不到莫德雷德）｜🛡️派西维尔 能看到梅林和莫甘娜，但分不清谁是谁｜🔮莫甘娜 假扮梅林｜👑莫德雷德 梅林看不到他｜🌑奥伯伦 不认识同伙，同伙也不认识他｜🗡️刺客 负责最后刺杀梅林</p>
-  </details></div>`;
-}
-
-// 按住看身份
-let holdTarget = null;
-const isRc = (e) => e.target.closest && e.target.closest('#rc');
-const on = (e) => { if (isRc(e)) { e.preventDefault(); reveal = true; render(); } };
-const off = () => { if (reveal) { reveal = false; render(); } };
-document.addEventListener('touchstart', on, { passive: false }); document.addEventListener('mousedown', on);
-document.addEventListener('touchend', off); document.addEventListener('mouseup', off); document.addEventListener('touchcancel', off);
-document.addEventListener('contextmenu', (e) => isRc(e) && e.preventDefault());
-
-render(); connect();
-</script>
+<script src="roles.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

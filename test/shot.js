@@ -1,0 +1,47 @@
+// 起一个7人局推进到第2轮发车投票，然后用无头 Chrome 以 P0 身份打开页面截图（含上帝视角）
+const WebSocket = require('ws'); const { spawn } = require('child_process'); const fs = require('fs');
+const URL = 'ws://localhost:3123', OUT = process.argv[2];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const cl = []; let code; const tag = 'shot' + Date.now();
+const mk = () => new Promise((res) => { const w = new WebSocket(URL); const c = { w, s: null }; w.on('message', (d) => { const m = JSON.parse(d); if (m.t === 'state') c.s = m.s; if (m.t === 'joined') code = m.code; }); w.on('open', () => res(c)); });
+const tx = (c, o) => c.w.send(JSON.stringify(o));
+const AV = ['🦁','🐺','🦊','🐻','🐼','🐯','🦉'];
+(async () => {
+  for (let i = 0; i < 7; i++) { const c = await mk(); cl.push(c); tx(c, { t: i ? 'join' : 'create', code, name: ['阿明','小红','老王','Leo','七七','大胖','Mia'][i], avatar: AV[i], token: tag + i }); await sleep(80); }
+  const S = () => cl[0].s, by = (id) => cl.find((c) => c.s.me === id);
+  tx(cl[0], { t: 'start' }); await sleep(150);
+  for (let k = 0; k < 3; k++) { // 一次否决、一次通过+任务失败、再一次发车
+    const s = S(); tx(by(s.leader), { t: 'propose', team: s.players.slice(k, k + s.teamSizes[s.quest]).map((p) => p.id) }); await sleep(80);
+    cl.forEach((c, i) => tx(c, { t: 'vote', approve: k === 0 ? i < 2 : i < 5 })); await sleep(100);
+    if (S().phase === 'quest') { for (const id of S().team) tx(by(id), { t: 'quest', success: false }); await sleep(100); }
+  }
+  const s = S(); tx(by(s.leader), { t: 'propose', team: s.players.slice(0, s.teamSizes[s.quest]).map((p) => p.id) }); await sleep(80);
+  cl.slice(0, 3).forEach((c) => tx(c, { t: 'vote', approve: true }));
+  tx(by(S().leader), { t: 'speechStart' }); await sleep(100);
+  cl[0].w.close(); await sleep(100);
+  const chrome = spawn('C:/Program Files/Google/Chrome/Application/chrome.exe', ['--headless=new', '--remote-debugging-port=9333', '--user-data-dir=' + OUT + '/prof', '--window-size=420,2600', 'about:blank']);
+  await sleep(2500);
+  const list = await (await fetch('http://127.0.0.1:9333/json')).json();
+  const page = new WebSocket(list.find((t) => t.type === 'page').webSocketDebuggerUrl);
+  await new Promise((r) => page.on('open', r));
+  let id = 0; const pend = {}; const errs = [];
+  page.on('message', (d) => { const m = JSON.parse(d); if (pend[m.id]) pend[m.id](m.result); if (m.method === 'Runtime.exceptionThrown') errs.push(m.params.exceptionDetails.exception?.description); if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errs.push(JSON.stringify(m.params.args)); });
+  const cdp = (method, params = {}) => new Promise((r) => { pend[++id] = r; page.send(JSON.stringify({ id, method, params })); });
+  await cdp('Runtime.enable'); await cdp('Page.enable');
+  await cdp('Emulation.setDeviceMetricsOverride', { width: 400, height: 2400, deviceScaleFactor: 1, mobile: true });
+  await cdp('Page.navigate', { url: 'http://localhost:3123/' }); await sleep(800);
+  await cdp('Runtime.evaluate', { expression: `localStorage.token='${tag}0';localStorage.name='阿明';localStorage.room='${code}';localStorage.avatar='🦁';sessionStorage.clear()` });
+  await cdp('Page.reload'); await sleep(1500);
+  await cdp('Runtime.evaluate', { expression: `document.getElementById('modal').innerHTML=''` });
+  fs.writeFileSync(OUT + '/player.png', Buffer.from((await cdp('Page.captureScreenshot')).data, 'base64'));
+  await cdp('Runtime.evaluate', { expression: `sessionStorage.godPw='test';localStorage.godRoom='${code}';delete localStorage.room` });
+  await cdp('Page.reload'); await sleep(1500);
+  await cdp('Runtime.evaluate', { expression: `document.getElementById('modal').innerHTML=''` });
+  fs.writeFileSync(OUT + '/god.png', Buffer.from((await cdp('Page.captureScreenshot')).data, 'base64'));
+  await cdp('Page.navigate', { url: 'http://localhost:3123/?r=1234' }); await sleep(800);
+  await cdp('Runtime.evaluate', { expression: `localStorage.clear();sessionStorage.clear();location.reload()` }); await sleep(1200);
+  await cdp('Emulation.setDeviceMetricsOverride', { width: 400, height: 900, deviceScaleFactor: 1, mobile: true });
+  fs.writeFileSync(OUT + '/home.png', Buffer.from((await cdp('Page.captureScreenshot')).data, 'base64'));
+  console.log('errors:', errs.length ? errs : 'none');
+  chrome.kill(); process.exit(0);
+})();
