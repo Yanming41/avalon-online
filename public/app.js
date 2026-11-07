@@ -113,7 +113,7 @@ function homeView() {
 function codexView() {
   const card = (cls, imgSrc, name, back, key) => `<div class="flip ${cls}" onclick="cardClick(this,'${key}')"><div class="in">
     <div class="fc"><div class="fb">${name.split(' ')[0]}</div><img loading="lazy" src="${imgSrc}" alt="" onerror="this.remove()"><i class="frm"></i><div class="nm2">${name.replace(/^\S+ /, '')}</div><span class="zoom" onclick="event.stopPropagation();showDetail('${key}',this.parentNode.querySelector('img'))">🔍</span></div>
-    <div class="bk">${back}</div></div></div>`;
+    <div class="bk parch">${back}</div></div></div>`;
   const roleCard = ([k, R]) => card(R.side === 'good' ? 'g' : 'e', img(k), `${R.emo} ${R.name}`,
     `<b class="t">${R.emo} ${R.name}</b><span class="side">${R.side === 'good' ? '正义阵营' : '邪恶阵营'}</span><p><b>知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p>`, k);
   const roles = Object.entries(ROLES);
@@ -218,7 +218,7 @@ function zoomImg(src, title, html, from) {
   el.className = 'lightbox opening';
   if (html) el.classList.add('detail');
   el.innerHTML = `<div class="lbx">✕</div><div class="lbm"><div class="lbs"><div class="lbf"><img src="${src}" alt="" onerror="this.parentNode.classList.add('noimg')"></div></div>
-    ${html ? `<div class="lbd" onclick="event.stopPropagation()">${html}<div class="mute" style="margin-top:10px">点图片放大细节 · 点空白处关闭</div></div>` : `<div class="lbt">${title || ''}<br><small>点图片放大 / 缩小，放大后可拖动</small></div>`}</div>`;
+    ${html ? `<div class="lbd parch" onclick="event.stopPropagation()">${html}<div class="mute" style="margin-top:10px">点图片放大细节 · 点空白处关闭</div></div>` : `<div class="lbt">${title || ''}<br><small>点图片放大 / 缩小，放大后可拖动</small></div>`}</div>`;
   const im = el.querySelector('img'), sc = el.querySelector('.lbs'), fr = el.querySelector('.lbf');
   const close = () => {
     if (el.classList.contains('closing')) return;

@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="theme-color" content="#14121c">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@600;800&family=Noto+Serif+SC:wght@500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Cinzel:wght@400;600;800&family=Cormorant+Garamond:ital,wght@0,300;0,500;1,400&family=ZCOOL+XiaoWei&family=Noto+Serif+SC:wght@200;300;500;700;900&display=swap" rel="stylesheet">
 <title>阿瓦隆 · 在线助手</title>
 <style>
 :root{--bg:#0f0b07;--card:rgba(30,22,14,.9);--line:#5c4626;--gold:#d8ad55;--good:#4a7cc4;--evil:#b33a33;--ok:#4f8f4a;--txt:#f0e6cf;--mute:#a8987c;
---serif:"Cinzel","Noto Serif SC","Songti SC","STSong","Source Han Serif SC","SimSun",Georgia,serif;--deco:"Cinzel Decorative","Cinzel","Noto Serif SC",serif}
+--serif:"Cinzel","Noto Serif SC","Songti SC","STSong","Source Han Serif SC","SimSun",Georgia,serif;--thin:"Cormorant Garamond","ZCOOL XiaoWei","Noto Serif SC","Songti SC",serif;--deco:"Cinzel Decorative","Cinzel","Noto Serif SC",serif}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:var(--bg);color:var(--txt);font-family:"Noto Serif SC","Songti SC","STSong",-apple-system,"PingFang SC","Microsoft YaHei",serif;font-weight:500;min-height:100vh}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:"Cormorant Garamond","Noto Serif SC","Songti SC","STSong",-apple-system,"PingFang SC","Microsoft YaHei",serif;font-weight:300;letter-spacing:.02em;min-height:100vh}
 body::before{content:"";position:fixed;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(12,8,4,.55),rgba(12,8,4,.88) 45%,rgba(10,7,4,.96)),url(img/items/bg.webp) center top/cover no-repeat,var(--bg)}
 main{max-width:520px;margin:0 auto;padding:10px 12px 90px}
 h1{font-family:var(--serif);font-weight:900;color:var(--gold);text-align:center;letter-spacing:10px;margin:22px 0 2px;font-size:42px;text-shadow:0 2px 0 #000,0 0 18px rgba(216,173,85,.45)}
@@ -139,7 +139,7 @@ body.tv .tvgrid > div:last-child .card{font-size:18px!important}
 .flip .fc{background:radial-gradient(circle at 50% 40%,#4a3820,#1a120a 75%)}.flip .fc .fb{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:54px;padding-bottom:20%}
 .flip .fc img{position:relative;width:100%;height:100%;object-fit:cover;display:block}
 .flip .fc .nm2{position:absolute;left:0;right:0;bottom:0;padding:18px 4px 6px;text-align:center;font-family:var(--serif);font-weight:700;font-size:14px;letter-spacing:1px;background:linear-gradient(transparent,rgba(0,0,0,.9) 60%);text-shadow:0 1px 2px #000}
-.flip .bk{transform:rotateY(180deg);background:linear-gradient(160deg,#efe0bd,#d8c393 60%,#c7ad78);color:#2b1d0c;padding:9px 8px;font-size:12px;-webkit-overflow-scrolling:touch;line-height:1.5;overflow:auto;border-color:#8a6a2e}
+.flip .bk{transform:rotateY(180deg);padding:10px 9px;font-size:12.5px;-webkit-overflow-scrolling:touch;line-height:1.5;overflow:auto;border-color:#8a6a2e}
 .flip .bk b.t{display:block;font-family:var(--serif);font-size:14px;text-align:center;border-bottom:1px solid #8a6a2e88;padding-bottom:3px;margin-bottom:4px}
 .flip .bk .side{display:block;text-align:center;font-size:10.5px;margin-bottom:4px}
 .flip.g .bk .side{color:#234f8c}.flip.e .bk .side{color:#8c231c}
@@ -185,7 +185,7 @@ body.tv .tvgrid > div:last-child .card{font-size:18px!important}
 .lightbox.big .lbf{max-height:none}
 .lightbox.detail .lbs{flex:0 0 auto;max-height:52vh;padding:14px 14px 0}
 .lightbox.detail .lbf img{max-height:calc(52vh - 14px)}
-.lightbox .lbd{flex:1;overflow:auto;margin:12px;padding:14px 16px;border-radius:4px;background:linear-gradient(160deg,#efe0bd,#d8c393 60%,#c7ad78);color:#2b1d0c;font-size:14px;line-height:1.7;box-shadow:inset 0 0 0 1px #8a6a2e,inset 0 0 0 4px rgba(138,106,46,.25)}
+.lightbox .lbd{flex:1;overflow:auto;margin:12px;padding:18px 20px;font-size:15px;line-height:1.85}
 .lightbox .lbd h3{margin:0 0 4px;font-family:var(--serif);font-size:22px;text-align:center;color:#3a2408}
 .lightbox .lbd .side{text-align:center;font-size:13px;margin-bottom:8px}.lightbox .lbd .side.good{color:#234f8c}.lightbox .lbd .side.evil{color:#8c231c}
 .lightbox .lbd .mute{color:#6d5a3a}
@@ -235,9 +235,27 @@ button:hover:not(:disabled){filter:brightness(1.08)}
 .flip:hover .fc img,.pick.can:hover img,.gallery .gi:hover img{transform:scale(1.04)}
 .flip .fc img,.pick img,.gallery .gi img{transition:transform .35s ease}
 @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+
+/* ---------- 羊皮纸文本框 ---------- */
+.parch{position:relative;isolation:isolate;color:#3b2a14;background:none!important;box-shadow:none!important;border:0!important;font-family:"Cormorant Garamond","Noto Serif SC","Songti SC",serif;font-weight:300;letter-spacing:.03em}
+.parch::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:2px;filter:url(#rough);
+  background:
+    radial-gradient(ellipse at 18% 12%,rgba(255,250,232,.75),transparent 42%),
+    radial-gradient(ellipse at 85% 90%,rgba(122,78,28,.32),transparent 48%),
+    radial-gradient(circle at 72% 28%,rgba(150,105,40,.14) 0 7%,rgba(150,105,40,.05) 8%,transparent 10%),
+    radial-gradient(circle at 25% 78%,rgba(150,105,40,.10) 0 5%,transparent 7%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .24 0 0 0 0 .1 0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    linear-gradient(165deg,#f3e6c6,#e6d0a0 50%,#d2b67e);
+  box-shadow:inset 0 0 38px rgba(112,70,22,.55),inset 0 0 6px rgba(90,55,15,.7),0 12px 30px rgba(0,0,0,.6)}
+.parch h3,.parch b.t{font-family:"ZCOOL XiaoWei","Cormorant Garamond","Noto Serif SC",serif!important;font-weight:400!important;letter-spacing:.12em;color:#2e1d08}
+.parch b,.parch strong{font-weight:500;color:#4a2f0e}
+.parch .mute{color:#7a6240!important}
+.parch ul li::marker{color:#8a5a1e}
+.parch::after{content:"";position:absolute;left:10%;right:10%;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(120,80,30,.35),transparent)}
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="rough" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency=".04" numOctaves="4" seed="7"/><feDisplacementMap in="SourceGraphic" scale="9"/></filter></svg>
 <main id="app"></main>
 <div id="modal"></div>
 <div class="toast" id="toast"></div>

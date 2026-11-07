@@ -64,7 +64,7 @@ const AV = ['🦁','🐺','🦊','🐻','🐼','🐯','🦉'];
   fs.writeFileSync(OUT + '/zoom.png', Buffer.from((await cdp('Page.captureScreenshot')).data, 'base64'));
   await cdp('Runtime.evaluate', { expression: `document.querySelector('.lightbox')?.remove()` });
   await cdp('Emulation.setDeviceMetricsOverride', { width: 1600, height: 900, deviceScaleFactor: 1, mobile: false });
-  await cdp('Runtime.evaluate', { expression: `showDetail('merlin')` }); await sleep(800);
+  await cdp('Runtime.evaluate', { expression: `showDetail('oberon')` }); await sleep(1500);
   fs.writeFileSync(OUT + '/detail_pc.png', Buffer.from((await cdp('Page.captureScreenshot')).data, 'base64'));
   await cdp('Page.navigate', { url: 'http://localhost:3123/?watch=' + code }); await sleep(1500);
   await cdp('Runtime.evaluate', { expression: `document.getElementById('modal').innerHTML=''` });
