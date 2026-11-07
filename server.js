@@ -116,8 +116,6 @@ function viewFor(room, pid, god) {
     phase: g ? g.phase : 'lobby', godEnabled: !!GOD_PASSWORD,
   };
   const me = room.players.find((p) => p.id === pid);
-  if (me) v.myPin = me.pin;
-  if (god) v.pins = Object.fromEntries(room.players.map((p) => [p.id, p.pin]));
   if (!g) return v;
   const n = room.players.length;
   Object.assign(v, {
@@ -402,7 +400,7 @@ function godAction(room, msg, ws) {
     let k = 1;
     while (room.players.length < want) {
       while (room.players.some((x) => x.name === '机器人' + k)) k++;
-      room.players.push({ id: crypto.randomUUID().slice(0, 8), token: 'bot-' + crypto.randomUUID(), name: '机器人' + k, avatar: AVATARS[crypto.randomInt(AVATARS.length)], pin: String(crypto.randomInt(1000, 10000)), bot: true });
+      room.players.push({ id: crypto.randomUUID().slice(0, 8), token: 'bot-' + crypto.randomUUID(), name: '机器人' + k, avatar: AVATARS[crypto.randomInt(AVATARS.length)], bot: true });
     }
     if (!room.hostId) room.hostId = room.players[0].id;
   } else if (a === 'removeBots') {
@@ -476,14 +474,13 @@ wss.on('connection', (ws, req) => {
       if (!p) {
         const same = room.players.find((x) => x.name === name);
         if (same) {
-          // 换手机/清了缓存：用昵称 + 重连码找回自己的位置
-          if (!msg.pin) return ws.send(JSON.stringify({ t: 'needPin', name }));
-          if (!pinOk(String(msg.pin), same.pin)) return err(ws, '重连码不对');
+          // 换手机/清了缓存：房间号 + 原来的昵称就能接回自己的位置；原玩家还在线时不允许（防冒名顶替）
+          if (same.ws && same.ws.readyState === 1) return err(ws, `「${name}」正在线上。如果是你本人掉线了，请等几秒再试；否则请换个昵称`);
           same.token = token; p = same;
         } else {
           if (room.game) return err(ws, '游戏已开始，不能中途加入。如果你是掉线的玩家，请填写原来的昵称');
           if (room.players.length >= 10) return err(ws, '房间已满（最多 10 人）');
-          p = { id: crypto.randomUUID().slice(0, 8), token, name, avatar, pin: String(crypto.randomInt(1000, 10000)) };
+          p = { id: crypto.randomUUID().slice(0, 8), token, name, avatar };
           room.players.push(p);
         }
       }
@@ -535,6 +532,7 @@ wss.on('connection', (ws, req) => {
 // 6 小时没人动的房间清掉
 setInterval(() => { const t = Date.now(); for (const [c, r] of rooms) if (t - r.touched > 6 * 3600e3) { clearTimeout(r.speechTimer); rooms.delete(c); } }, 600e3);
 // 心跳，防止云平台断开空闲连接
-setInterval(() => wss.clients.forEach((c) => c.readyState === 1 && c.ping()), 25e3);
+setInterval(() => wss.clients.forEach((c) => { if (c._alive === false) return c.terminate(); c._alive = false; if (c.readyState === 1) c.ping(); }), 20e3);
+wss.on('connection', (c) => { c._alive = true; c.on('pong', () => { c._alive = true; }); });
 
 server.listen(PORT, () => console.log(`Avalon on http://localhost:${PORT}  god=${GOD_PASSWORD ? 'on' : 'off'}`));

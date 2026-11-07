@@ -3,7 +3,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
 const token = localStorage.token || (localStorage.token = uuid());
 const AVATARS = ['🦁', '🐺', '🦊', '🐻', '🐼', '🐯', '🦉', '🦅', '🐉', '🦄', '🐸', '🐙', '🦈', '🐢', '🦌', '🐗', '🐰', '🐱', '🐶', '🐧'];
-let ws, S = null, sel = new Set(), reveal = false, online = false, clockSkew = 0, pinFor = null, showGuide = false;
+let ws, S = null, sel = new Set(), reveal = false, online = false, clockSkew = 0, showGuide = false;
 let myAvatar = localStorage.avatar || AVATARS[Math.floor(Math.random() * AVATARS.length)];
 
 function toast(m, ok) { const t = $('#toast'); t.textContent = m; t.style.background = ok ? 'var(--ok)' : 'var(--evil)'; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => (t.style.display = 'none'), 2800); }
@@ -26,9 +26,8 @@ function connect() {
   };
   ws.onmessage = (e) => {
     const m = JSON.parse(e.data);
-    if (m.t === 'joined') { localStorage.room = m.code; pinFor = null; history.replaceState(null, '', '?r=' + m.code); }
+    if (m.t === 'joined') { localStorage.room = m.code; history.replaceState(null, '', '?r=' + m.code); }
     if (m.t === 'godOk') { localStorage.godRoom = m.code; toast('已进入上帝模式', true); }
-    if (m.t === 'needPin') { pinFor = m.name; S = null; render(); toast('这个昵称已在房间里。如果是你本人，请输入重连码'); }
     if (m.t === 'kicked') { delete localStorage.room; S = null; toast(m.m); render(); }
     if (m.t === 'state') {
       const prev = S;
@@ -65,7 +64,7 @@ function preload(role) {
 }
 function showRole(k) {
   const R = ROLES[k];
-  $('#modal').innerHTML = `<div class="modal" onclick="if(event.target===this)this.remove()"><div class="box guide"><img class="portrait" src="${img(k)}" alt="" onerror="this.remove()" style="margin:0 auto 10px;max-height:38vh;width:auto;max-width:100%">
+  $('#modal').innerHTML = `<div class="modal" onclick="if(event.target===this)this.remove()"><div class="box guide"><img class="portrait" src="${img(k)}" alt="" onerror="this.remove()" onclick="zoomImg('${img(k)}','${R.name}')" style="margin:0 auto 10px;max-height:38vh;width:auto;max-width:100%;cursor:zoom-in">
   <h3 style="margin:0">${R.emo} ${R.name}（${R.side === 'good' ? '好人' : '坏人'}）</h3><p><b>知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul>
   <button class="sec" onclick="$('#modal').innerHTML=''">关闭</button></div></div>`;
 }
@@ -78,7 +77,7 @@ function render() {
   const meP = S.players.find((p) => p.id === S.me);
   let h = `<div class="top"><span class="dot ${online ? '' : 'off'}"></span>房间 <b>${S.code}</b>
     ${meP ? `· ${meP.avatar} ${esc(meP.name)}${S.me === S.hostId ? '（房主）' : ''}` : ''}${isGod() ? (S.viewAs ? ` · <b style="color:#c9a6ff">👁 代入 ${esc(P(S.viewAs).name)}</b>` : ' · <b style="color:#c9a6ff">👁 上帝</b>') : ''}
-    <span class="sp"><span onclick="toggleMute()" style="cursor:pointer;font-size:16px">${muted ? '🔇' : '🔔'}</span> ${S.myPin ? `重连码 <b>${S.myPin}</b>` : ''}</span></div>`;
+    <span class="sp"><span onclick="toggleMute()" style="cursor:pointer;font-size:16px">${muted ? '🔇' : '🔔'}</span></span></div>`;
   if (!online) h += `<div class="banner" style="background:#5e1d1d;color:#fff">连接断开，正在自动重连…</div>`;
   if (isGod()) h += viewAsBar();
   h += S.phase === 'lobby' ? lobbyView() : gameView();
@@ -93,11 +92,10 @@ function homeView() {
   const code = new URLSearchParams(location.search).get('r') || localStorage.room || '';
   return `<h1>阿瓦隆</h1><div class="sub" style="font-family:var(--serif);letter-spacing:3px">卡美洛的忠臣与莫德雷德的爪牙</div>
   <div class="card"><h3>选个头像</h3><div class="avpick">${AVATARS.map((a) => `<span class="${a === myAvatar ? 'on' : ''}" onclick="pickAv('${a}')">${a}</span>`).join('')}</div>
-  <input id="nm" placeholder="你的昵称" maxlength="12" value="${esc(pinFor || localStorage.name || '')}">
+  <input id="nm" placeholder="你的昵称" maxlength="12" value="${esc(localStorage.name || '')}">
   <input id="cd" placeholder="房间号（4位）" inputmode="numeric" maxlength="4" value="${esc(code)}">
-  ${pinFor ? `<input id="pin" placeholder="重连码（游戏页右上角的4位数）" inputmode="numeric" maxlength="4"><div class="mute">掉线换了设备？填原来的昵称和重连码就能回到原来的位置，身份不会变。忘了重连码可以找上帝或者看原来的手机。</div>` : ''}
-  <button onclick="doJoin()">${pinFor ? '恢复连接' : '加入房间'}</button>
-  ${pinFor ? '' : '<button class="sec" onclick="doCreate()">创建新房间</button>'}</div>
+  <button onclick="doJoin()">加入房间</button><div class="mute center">掉线或换了手机？填同一个房间号和原来的昵称就能回到原位，身份不变。</div>
+  <button class="sec" onclick="doCreate()">创建新房间</button></div>
   <div class="card"><details><summary>📺 观战 / 投屏大屏</summary><input id="wcd" placeholder="房间号" inputmode="numeric" maxlength="4" value="${esc(code)}">
   <button class="sec" onclick="const c=$('#wcd').value.trim();/^\d{4}$/.test(c)?location.href='/?watch='+c:toast('房间号是 4 位数字')">打开观战页</button><div class="mute">只显示公开信息（任务进度、队长、发车票型、发言计时等），适合投到电视上。不占玩家位置。</div></details></div>
   <div class="card god"><details><summary>👁 上帝模式（裁判 / 调试）</summary>
@@ -109,7 +107,7 @@ function homeView() {
 // 首页图鉴：所有角色立绘 + 道具卡，点一下翻面看能力
 function codexView() {
   const card = (cls, imgSrc, name, back) => `<div class="flip ${cls}" onclick="this.classList.toggle('on')"><div class="in">
-    <div class="fc"><div class="fb">${name.split(' ')[0]}</div><img loading="lazy" src="${imgSrc}" alt="" onerror="this.remove()"><div class="nm2">${name}</div></div>
+    <div class="fc"><div class="fb">${name.split(' ')[0]}</div><img loading="lazy" src="${imgSrc}" alt="" onerror="this.remove()"><div class="nm2">${name}</div><span class="zoom" onclick="event.stopPropagation();zoomImg('${imgSrc}','${name}')">🔍</span></div>
     <div class="bk">${back}</div></div></div>`;
   const roleCard = ([k, R]) => card(R.side === 'good' ? 'g' : 'e', img(k), `${R.emo} ${R.name}`,
     `<b class="t">${R.emo} ${R.name}</b><span class="side">${R.side === 'good' ? '正义阵营' : '邪恶阵营'}</span><p><b>知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p>`);
@@ -124,8 +122,7 @@ function doCreate() { const n = getName(); if (n) send({ t: 'create', name: n, a
 function doJoin() {
   const n = getName(); const c = $('#cd').value.trim(); if (!n) return;
   if (!/^\d{4}$/.test(c)) return toast('房间号是 4 位数字');
-  const pin = $('#pin') && $('#pin').value.trim();
-  send({ t: 'join', code: c, name: n, avatar: myAvatar, token, pin });
+  send({ t: 'join', code: c, name: n, avatar: myAvatar, token });
 }
 function doGod() {
   const c = $('#gcd').value.trim(), pw = $('#gpw').value;
@@ -133,7 +130,7 @@ function doGod() {
   sessionStorage.godPw = pw; send({ t: 'god', code: c, password: pw });
 }
 function leave() {
-  if (!confirm('确定离开房间？（游戏中离开后，可以用昵称 + 重连码回来）')) return;
+  if (!confirm('确定离开房间？（游戏中离开后，用房间号 + 原昵称可以回来）')) return;
   delete localStorage.room; delete localStorage.godRoom; S = null; history.replaceState(null, '', '/'); ws.close();
 }
 
@@ -144,16 +141,58 @@ function lobbyView() {
     <button class="sec" onclick="share()">复制邀请链接</button></div>
   ${S.me ? `<div class="card"><h3>我的头像</h3><div class="avpick">${AVATARS.map((a) => `<span class="${a === P(S.me).avatar ? 'on' : ''}" onclick="pickAv('${a}')">${a}</span>`).join('')}</div></div>` : ''}
   <div class="card"><h3>玩家 ${n}/10（5 人起）</h3><div class="players">${S.players.map((p) => `<div class="p ${p.online ? '' : 'off'}"><span class="av">${p.avatar}</span>${esc(p.name)}<span class="tags">${p.id === S.hostId ? '<span class="tag lead">房主</span>' : ''}${p.online ? '' : '<span class="tag">离线</span>'}${host && p.id !== S.me ? `<span class="tag" onclick="${isGod() ? `god('kick',{id:'${p.id}'})` : `send({t:'kick',id:'${p.id}'})`}">移出</span>` : ''}</span></div>`).join('')}</div></div>
-  <div class="card"><h3>角色配置</h3><div class="mute">梅林、刺客一定有，其余位置自动补忠臣和爪牙</div>
-    <div class="mute" style="margin-top:6px">好人</div>${ck('percival', '🛡️ 派西维尔')}${ck('cleric', '⛪ 牧师（知道首任队长阵营）')}${ck('troublemaker', '🎭 捣蛋鬼（被查验显示为坏）')}
-    <div class="mute" style="margin-top:6px">坏人</div>${ck('morgana', '🔮 莫甘娜')}${ck('mordred', '👑 莫德雷德')}${ck('oberon', '🌑 奥伯伦')}${ck('lunatic', '🤪 疯子（必须出失败）')}${ck('brute', '🪓 莽夫（只在前3轮能出失败）')}${ck('revealer', '📢 暴露者（第2次失败后公开）')}${ck('trickster', '🃏 诡术师（被查验可伪装）')}
-    <div class="mute" style="margin-top:6px">成对角色（一好一坏）</div>${ck('sorcerer', '✨ 巫师（可出魔法牌反转结果）')}
-    <label class="ck">⚜️ 兰斯洛特 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({lancelot:+this.value})">${['关闭', '规则1：第3轮起每次组队翻忠诚牌', '规则2：每轮开始翻忠诚牌', '规则3：不换阵营，互相认识'].map((t, i) => `<option value="${i}" ${st.lancelot === i ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
-    <div class="mute" style="margin-top:6px">道具</div>${ck('lady', '🧜‍♀️ 湖中仙女（第2-4轮后查验阵营）')}${ck('excalibur', '🔱 王者之剑（队员可翻转别人的任务牌）')}
+  <div class="card"><h3>角色配置</h3><div class="mute">${host ? '点立绘选择/取消角色，点 🔍 放大看。' : '房主正在挑选角色。'}梅林、刺客一定在场，其余位置自动补忠臣和爪牙。</div>
+    ${pickGrid(host)}
     ${roleCountHint()}
     <label class="ck">⏱ 每人发言时长 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({speechSecs:+this.value})">${[30, 60, 90, 120, 180, 300].map((s) => `<option value="${s}" ${st.speechSecs === s ? 'selected' : ''}>${s >= 60 ? s / 60 + ' 分钟' : s + ' 秒'}</option>`).join('')}</select></label></div>
   ${host ? `<button onclick="${isGod() ? "god('start')" : "send({t:'start'})"}" ${n < 5 ? 'disabled' : ''}>开始游戏 · 发身份</button>` : '<div class="banner">等待房主开始</div>'}`;
 }
+// 立绘卡片选角色
+const PICKS = {
+  good: [['merlin', 'merlin', '梅林', 'lock'], ['percival', 'percival', '派西维尔'], ['cleric', 'cleric', '牧师'], ['troublemaker', 'troublemaker', '捣蛋鬼']],
+  evil: [['assassin', 'assassin', '刺客', 'lock'], ['morgana', 'morgana', '莫甘娜'], ['mordred', 'mordred', '莫德雷德'], ['oberon', 'oberon', '奥伯伦'], ['lunatic', 'lunatic', '疯子'], ['brute', 'brute', '莽夫'], ['revealer', 'revealer', '暴露者'], ['trickster', 'trickster', '诡术师']],
+  pair: [['sorcerer', 'good_sorcerer', '巫师·一好一坏'], ['lancelot', 'good_lancelot', '兰斯洛特']],
+  item: [['lady', 'items/lady', '湖中仙女'], ['excalibur', 'items/excalibur', '王者之剑']],
+};
+const LANCE = ['关闭', '规则1·第3轮起翻牌', '规则2·每轮翻牌', '规则3·不换互认'];
+const picSrc = (p) => (p.startsWith('items/') ? `img/${p}.webp` : img(p));
+function pickGrid(host) {
+  const st = S.settings;
+  const card = ([k, pic, name, lock], side) => {
+    const on = lock || (k === 'lancelot' ? st.lancelot > 0 : !!st[k]);
+    const cap = k === 'lancelot' ? `${name}<br><small>${LANCE[st.lancelot || 0]}</small>` : name;
+    const R = ROLES[pic] || {};
+    return `<div class="pick ${side} ${on ? 'on' : ''} ${lock ? 'lock' : ''} ${host && !lock ? 'can' : ''}" ${host && !lock ? `onclick="togPick('${k}')"` : ''}>
+      <div class="fb">${R.emo || (ITEMS[pic.replace('items/', '')] || {}).emo || ''}</div><img loading="lazy" src="${picSrc(pic)}" alt="" onerror="this.remove()">
+      <div class="cap">${cap}</div>${lock ? '<span class="lk">必选</span>' : on ? '<span class="lk ok">✓</span>' : ''}
+      <span class="zoom" onclick="event.stopPropagation();zoomImg('${picSrc(pic)}','${esc(name)}')">🔍</span></div>`;
+  };
+  return `<div class="pgh">正义阵营</div><div class="pgrid">${PICKS.good.map((c) => card(c, 'g')).join('')}</div>
+  <div class="pgh">邪恶阵营</div><div class="pgrid">${PICKS.evil.map((c) => card(c, 'e')).join('')}</div>
+  <div class="pgh">成对角色 <small>${host ? '（兰斯洛特点一下切换规则）' : ''}</small></div><div class="pgrid">${PICKS.pair.map((c) => card(c, 'x')).join('')}</div>
+  <div class="pgh">道具</div><div class="pgrid">${PICKS.item.map((c) => card(c, 'x')).join('')}</div>`;
+}
+function togPick(k) {
+  const st = S.settings;
+  if (k === 'lancelot') return setS({ lancelot: ((st.lancelot || 0) + 1) % 4 });
+  setS({ [k]: !st[k] });
+}
+
+// ---------- 立绘放大浏览（点一下放大到原尺寸，可拖动；再点一下或点 ✕ 关闭） ----------
+function zoomImg(src, title) {
+  const el = document.createElement('div');
+  el.className = 'lightbox';
+  el.innerHTML = `<div class="lbx" onclick="event.stopPropagation();this.parentNode.remove()">✕</div><div class="lbs"><img src="${src}" alt=""></div><div class="lbt">${title || ''}<br><small>点图片放大 / 缩小，放大后可拖动</small></div>`;
+  const im = el.querySelector('img'), sc = el.querySelector('.lbs');
+  im.onclick = (e) => {
+    e.stopPropagation();
+    const big = el.classList.toggle('big');
+    if (big) { const r = im.getBoundingClientRect(); const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height; requestAnimationFrame(() => { sc.scrollLeft = sc.scrollWidth * fx - sc.clientWidth / 2; sc.scrollTop = sc.scrollHeight * fy - sc.clientHeight / 2; }); }
+  };
+  el.onclick = () => el.remove();
+  document.body.appendChild(el);
+}
+
 function roleCountHint() {
   const st = S.settings, n = S.players.length, E = { 5: 2, 6: 2, 7: 3, 8: 3, 9: 3, 10: 4 }[n];
   if (!E) return '';
@@ -180,7 +219,7 @@ function roleCard() {
   const bg = reveal && IMG_OK[r.role] ? ` style="background:url(${img(r.role)})"` : '';
   return `<div class="role ${reveal ? 'show ' + (r.evilNow ? 'e' : 'g') + (IMG_OK[r.role] ? '' : ' noimg') : ''}" id="rc"${bg}>${inner}</div>${extra.length ? `<div class="card" style="font-size:13px">${extra.join('')}<div class="mute">以上信息只有你能看到</div></div>` : ''}
   <div class="card guide"><details ${showGuide ? 'open' : ''} ontoggle="showGuide=this.open"><summary>📖 我的角色怎么玩（展开前确认旁边没人偷看）</summary>
-  ${IMG_OK[r.role] ? `<img class="gp" src="${img(r.role)}" alt="">` : ''}<p><b>${R.emo} ${R.name}</b>（${R.side === 'good' ? '好人' : '坏人'}）</p><p><b>你知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul></details></div>`;
+  ${IMG_OK[r.role] ? `<img class="gp" src="${img(r.role)}" alt="" onclick="zoomImg('${img(r.role)}','${R.name}')">` : ''}<p><b>${R.emo} ${R.name}</b>（${R.side === 'good' ? '好人' : '坏人'}）</p><p><b>你知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul></details></div>`;
 }
 
 function questTrack() {
@@ -271,7 +310,7 @@ function gameView() {
     h += '</div>';
   } else if (S.phase === 'end') {
     h += `<div class="banner" style="background:${S.winner === 'good' ? 'var(--good)' : 'var(--evil)'};color:#fff;font-size:20px">${S.winner === 'good' ? '🏆 正义阵营获胜' : '😈 邪恶阵营获胜'}<div style="font-size:14px;font-weight:400">${esc(S.reason)}</div></div>`;
-    h += `<div class="card"><h3>身份揭晓</h3><div class="gallery">${S.allRoles.map((r) => `<div class="gi ${r.evil ? 'e' : 'g'} ${S.assassinTarget === r.id ? 'dead' : ''}"><img class="portrait" src="${img(r.role)}" alt="" onerror="this.style.visibility='hidden'"><div class="cap">${seat(r.id)}号 ${nm(r.id)}<br><b style="color:${r.evil ? '#ff8a85' : '#9cc3ff'}">${r.name}</b>${S.assassinTarget === r.id ? ' 🗡️' : ''}</div></div>`).join('')}</div></div>
+    h += `<div class="card"><h3>身份揭晓</h3><div class="gallery">${S.allRoles.map((r) => `<div class="gi ${r.evil ? 'e' : 'g'} ${S.assassinTarget === r.id ? 'dead' : ''}" onclick="zoomImg('${img(r.role)}','${esc(P(r.id).name)} · ${r.name}')"><img class="portrait" src="${img(r.role)}" alt="" onerror="this.style.visibility='hidden'"><div class="cap">${seat(r.id)}号 ${nm(r.id)}<br><b style="color:${r.evil ? '#ff8a85' : '#9cc3ff'}">${r.name}</b>${S.assassinTarget === r.id ? ' 🗡️' : ''}</div></div>`).join('')}</div></div>
     <div class="card">${plist(false)}</div>`;
     if (S.me === S.hostId || isGod()) h += `<button onclick="${isGod() && S.me !== S.hostId ? "god('start')" : "send({t:'start'})"}">再来一局（重新发身份）</button><button class="sec" onclick="${isGod() && S.me !== S.hostId ? "god('lobby')" : "send({t:'lobby'})"}">回到大厅改配置</button>`;
   }
@@ -499,7 +538,7 @@ function stepView(d) {
 function godView() {
   const opts = (cur) => Object.keys(ROLES).map((r) => `<option value="${r}" ${r === cur ? 'selected' : ''}>${ROLES[r].emo}${ROLES[r].name}</option>`).join('');
   let h = `<div class="card god"><h3>👁 上帝控制台</h3>`;
-  if (S.phase === 'lobby') return h + `<details><summary>重连码</summary>${S.players.map((p) => `<div>${nm(p.id)}：<b>${S.pins[p.id]}</b></div>`).join('')}</details><div class="mute">游戏开始后这里会出现调整局面的控件。大厅里可以直接改配置、移出玩家、开始游戏。</div></div>`;
+  if (S.phase === 'lobby') return h + `<div class="mute">游戏开始后这里会出现调整局面的控件。大厅里可以直接改配置、移出玩家、开始游戏。</div></div>`;
   h += `<details open><summary>身份</summary>${S.players.map((p) => { const r = S.allRoles.find((x) => x.id === p.id); return `<div class="row" style="align-items:center"><span style="flex:1.2">${seat(p.id)} ${nm(p.id)}</span><select style="flex:1" onchange="god('role',{id:'${p.id}',role:this.value})">${opts(r.role)}</select><button class="sm sec" style="flex:none" onclick="god('leader',{id:'${p.id}'})">设队长</button></div>`; }).join('')}
   <div class="mute">改身份后，对应玩家手机上的身份会立刻更新</div></details>`;
   h += `<details open><summary>局面</summary>
@@ -514,7 +553,7 @@ function godView() {
   <button class="sm sec" onclick="god('toAssassin')">直接进入刺杀</button>
   <button class="sm good" onclick="confirm('判好人胜？')&&god('end',{winner:'good'})">判好人胜</button><button class="sm evil" onclick="confirm('判坏人胜？')&&god('end',{winner:'evil'})">判坏人胜</button>
   <button class="sm sec" onclick="confirm('回到大厅？本局作废')&&god('lobby')">回大厅</button></div></details>
-  <details><summary>重连码（玩家换设备时用）</summary>${S.players.map((p) => `<div>${seat(p.id)} ${nm(p.id)}：<b>${S.pins[p.id]}</b></div>`).join('')}</details></div>`;
+</div>`;
   return h;
 }
 
@@ -531,7 +570,7 @@ function rulesView() {
   <p><b>角色：</b></p><ul>${Object.values(ROLES).map((R) => `<li>${R.emo} <b>${R.name}</b>（${R.side === 'good' ? '好' : '坏'}）：${R.know}</li>`).join('')}</ul>
   <p><b>道具：</b>🧜‍♀️湖中仙女：第 2、3、4 轮任务后，持有人秘密查验一名没拿过的人的阵营，然后交给他。🔱王者之剑：队长发车时交给一名队员（不能给自己），出完牌后他可以翻转另一名队员的牌。⚜️兰斯洛特：一好一坏，翻出「换阵营」忠诚牌时两人互换阵营（规则 1：5 张牌里 2 张换，从第 3 轮起每次组队翻 1 张；规则 2：7 张里 2 张换，抽 5 张，每轮开始翻 1 张；规则 3：不换，但两人互相认识）。✨魔法牌：巫师专用，反转任务结果。</p>
   <p><b>推理标记：</b>点头像标记好坏，长按头像再点另一个人标记同边或互踩。标记只保存在你的手机上。</p>
-  <p><b>掉线了？</b>重新打开链接会自动回到房间。换了手机就填原来的昵称 + 重连码（游戏页右上角）。</p>
+  <p><b>掉线了？</b>重新打开链接会自动回到房间。换了手机就填同一个房间号和原来的昵称。</p>
   </details></div>`;
 }
 

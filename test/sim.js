@@ -23,15 +23,13 @@ const tx = (c, o) => c.w.send(JSON.stringify(o));
   assert(S().speech && S().speech.idx === 0 && S().speech.order.at(-1) === S().leader, '发言轮开始，队长最后');
   tx(by(S().speech.order[0]), { t: 'speechNext' }); await sleep(80);
   assert(S().speech.idx === 1, '说完了切到下一位');
-  // 换设备重连
-  const victim = cl[2], role = victim.s.myRole.role, pin = victim.s.myPin;
-  const nc = await mk(99); tx(nc, { t: 'join', code, name: 'P2', token: 'newdev' + tag }); await sleep(80);
-  assert(nc.msgs.some((m) => m.t === 'needPin'), '同名无重连码 → 要求重连码');
-  tx(nc, { t: 'join', code, name: 'P2', token: 'newdev' + tag, pin: '0000' === pin ? '1111' : '0000' }); await sleep(80);
-  assert(nc.msgs.some((m) => m.t === 'error'), '错误重连码被拒');
-  tx(nc, { t: 'join', code, name: 'P2', token: 'newdev' + tag, pin }); await sleep(120);
-  assert(nc.s && nc.s.myRole.role === role, '正确重连码找回原身份');
-  assert(victim.msgs.some((m) => m.t === 'kicked'), '旧设备被顶下线');
+  // 换设备重连：房间号 + 原昵称；原玩家在线时拒绝
+  const victim = cl[2], role = victim.s.myRole.role;
+  const nc = await mk(99); tx(nc, { t: 'join', code, name: 'P2', token: 'newdev' + tag }); await sleep(100);
+  assert(nc.msgs.some((m) => m.t === 'error' && m.m.includes('正在线上')), '原玩家在线时，同名加入被拒（防冒名）');
+  victim.w.close(); await sleep(200);
+  tx(nc, { t: 'join', code, name: 'P2', token: 'newdev' + tag }); await sleep(150);
+  assert(nc.s && nc.s.myRole.role === role, '原玩家掉线后，用房间号 + 昵称找回原身份');
   cl[2] = nc;
   // 上帝
   const g = await mk(-1); tx(g, { t: 'god', code, password: 'wrong' }); await sleep(80);
