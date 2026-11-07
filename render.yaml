@@ -3,5 +3,10 @@ services:
     name: avalon-online
     runtime: node
     plan: free
+    branch: master
     buildCommand: npm install
     startCommand: npm start
+    autoDeployTrigger: commit   # 每次推送到 master 自动部署
+    envVars:
+      - key: GOD_PASSWORD
+        sync: false             # 密码不进仓库，在 Render 后台填
