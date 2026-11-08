@@ -123,7 +123,10 @@ function viewFor(room, pid, god) {
     leader: room.players[g.leaderIdx].id, quest: g.quest, results: g.results,
     gameId: g.id, bellSeq: g.bellSeq || 0, rejects: g.rejects, team: g.team, history: g.history, speech: g.speech, lastEvent: g.lastEvent,
     voted: Object.keys(g.votes), questDone: Object.keys(g.questCards),
-    revealed: g.revealed, excalibur: g.excalibur, rolesInGame: g.rolesInGame,
+    revealed: g.revealed, excalibur: g.excalibur,
+    // Only aggregate counts: sorted role names cannot reveal seat/deal order.
+    rolesInGame: [...new Set(Object.values(room.roles))].sort(),
+    roleCounts: Object.fromEntries([...new Set(Object.values(room.roles))].sort().map((r) => [r, Object.values(room.roles).filter((x) => x === r).length])),
     lady: room.settings.lady ? { holder: g.ladyHolder, used: g.ladyUsed, log: g.ladyLog } : null,
     lancelot: g.lancelotRule ? { rule: g.lancelotRule, swapped: g.lancelotSwapped, flips: g.lancelotFlips, left: g.lancelotDeck.length } : null,
   });

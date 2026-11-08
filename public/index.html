@@ -11,7 +11,7 @@
 :root{--bg:#0f0b07;--card:rgba(30,22,14,.9);--line:#5c4626;--gold:#d8ad55;--good:#4a7cc4;--evil:#b33a33;--ok:#4f8f4a;--txt:#f0e6cf;--mute:#a8987c;
 --serif:"Cinzel","Noto Serif SC","Songti SC","STSong","Source Han Serif SC","SimSun",Georgia,serif;--thin:"Cormorant Garamond","ZCOOL XiaoWei","Noto Serif SC","Songti SC",serif;--deco:"Cinzel Decorative","Cinzel","Noto Serif SC",serif}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:var(--bg);color:var(--txt);font-family:"Cormorant Garamond","Noto Serif SC","Songti SC","STSong",-apple-system,"PingFang SC","Microsoft YaHei",serif;font-weight:300;letter-spacing:.02em;min-height:100vh}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:"Cormorant Garamond","Noto Serif SC","Songti SC","STSong",-apple-system,"PingFang SC","Microsoft YaHei",serif;font-weight:400;letter-spacing:.02em;min-height:100vh}
 body::before{content:"";position:fixed;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(12,8,4,.55),rgba(12,8,4,.88) 45%,rgba(10,7,4,.96)),url(img/items/bg.webp) center top/cover no-repeat,var(--bg)}
 main{max-width:520px;margin:0 auto;padding:10px 12px 90px}
 h1{font-family:var(--serif);font-weight:900;color:var(--gold);text-align:center;letter-spacing:10px;margin:22px 0 2px;font-size:42px;text-shadow:0 2px 0 #000,0 0 18px rgba(216,173,85,.45)}
@@ -237,7 +237,7 @@ button:hover:not(:disabled){filter:brightness(1.08)}
 @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 
 /* ---------- 羊皮纸文本框 ---------- */
-.parch{position:relative;isolation:isolate;color:#3b2a14;background:none!important;box-shadow:none!important;border:0!important;font-family:"Cormorant Garamond","Noto Serif SC","Songti SC",serif;font-weight:300;letter-spacing:.03em}
+.parch{position:relative;isolation:isolate;color:#3b2a14;background:none!important;box-shadow:none!important;border:0!important;font-family:"Cormorant Garamond","Noto Serif SC","Songti SC",serif;font-weight:400;letter-spacing:.03em}
 .parch::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:2px;filter:url(#rough);
   background:
     radial-gradient(ellipse at 18% 12%,rgba(255,250,232,.75),transparent 42%),
@@ -261,6 +261,7 @@ button:hover:not(:disabled){filter:brightness(1.08)}
 .flip .bk{overflow:hidden!important;padding:0!important}
 .flip .bk .bki{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 9px}
 </style>
+<link rel="stylesheet" href="rulebook.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="rough" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency=".04" numOctaves="4" seed="7"/><feDisplacementMap in="SourceGraphic" scale="9"/></filter></svg>
@@ -268,6 +269,7 @@ button:hover:not(:disabled){filter:brightness(1.08)}
 <div id="modal"></div>
 <div class="toast" id="toast"></div>
 <script src="roles.js"></script>
+<script src="rulebook.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

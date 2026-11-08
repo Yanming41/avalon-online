@@ -74,13 +74,14 @@ function showRole(k) {
 
 // ---------- 渲染 ----------
 function render() {
+  syncRulebook();
   const app = $('#app');
   if (WATCH) { app.innerHTML = tvView(); return animateView(app, 'tv:' + (S ? S.phase : '')); }
   if (!S) { app.innerHTML = homeView(); return animateView(app, 'home'); }
   const meP = S.players.find((p) => p.id === S.me);
   let h = `<div class="top"><span class="dot ${online ? '' : 'off'}"></span>房间 <b>${S.code}</b>
     ${meP ? `· ${meP.avatar} ${esc(meP.name)}${S.me === S.hostId ? '（房主）' : ''}` : ''}${isGod() ? (S.viewAs ? ` · <b style="color:#c9a6ff">👁 代入 ${esc(P(S.viewAs).name)}</b>` : ' · <b style="color:#c9a6ff">👁 上帝</b>') : ''}
-    <span class="sp"><span onclick="toggleMute()" style="cursor:pointer;font-size:16px">${muted ? '🔇' : '🔔'}</span></span></div>`;
+    <span class="sp"><span onclick="toggleMute()" style="cursor:pointer;font-size:16px">${muted ? '🔇' : '🔔'}</span>${S.gameId ? '<button class="sm sec book-trigger" onclick="openRulebook()" aria-haspopup="dialog">📖 本局规则书</button>' : ''}</span></div>`;
   if (!online) h += `<div class="banner" style="background:#5e1d1d;color:#fff">连接断开，正在自动重连…</div>`;
   if (isGod()) h += viewAsBar();
   h += S.phase === 'lobby' ? lobbyView() : gameView();
