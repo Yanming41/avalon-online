@@ -6,7 +6,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const server = spawn(process.execPath, ['server.js'], { cwd: path.resolve(__dirname, '..'), env: { ...process.env, PORT: String(port) }, stdio: 'ignore' });
   await sleep(900);
   const cl = []; let code; const tag = 'ts' + Date.now();
-  const AV = ['lion', 'tower', 'sun', 'moon', 'lion', 'sun', 'eagle'], NM = ['阿明', '小红', '老王', 'Leo', '七七', '大胖', 'Mia'];
+  const AV = ['lion', 'dragon', 'stag', 'wolf', 'owl', 'swan', 'eagle'], NM = ['阿明', '小红', '老王', 'Leo', '七七', '大胖', 'Mia'];
   for (let i = 0; i < 7; i++) { const w = new WebSocket(`ws://127.0.0.1:${port}`); const c = { w, s: null }; w.on('message', (d) => { const m = JSON.parse(d); if (m.t === 'state') c.s = m.s; if (m.t === 'joined') code = m.code; }); await new Promise((r) => w.on('open', r)); cl.push(c); w.send(JSON.stringify({ t: i ? 'join' : 'create', code, name: NM[i], avatar: AV[i], token: tag + i })); await sleep(80); }
   const tx = (c, o) => c.w.send(JSON.stringify(o)); const S = () => cl.find((c) => c.w.readyState === 1).s, by = (id) => cl.find((c) => c.s.me === id);
   tx(cl[0], { t: 'settings', settings: { lady: true } }); await sleep(60); tx(cl[0], { t: 'start' }); await sleep(200);

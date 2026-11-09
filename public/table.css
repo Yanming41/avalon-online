@@ -190,3 +190,4 @@ main{padding-bottom:190px!important}
 .hist-g:active{background:rgba(216,173,85,.08)}
 .hist-g b{font-family:var(--serif);letter-spacing:1px}.hist-g b.good{color:#9cc3ff}.hist-g b.evil{color:#ff8a85}
 .hist-g span{color:#e4d3ae;font-size:13px}.hist-g small{flex-basis:100%;color:var(--mute);font-size:12px}
+.quests .q.seal img + b{display:none}
