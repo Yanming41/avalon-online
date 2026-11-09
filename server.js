@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
+const records = require('./records');
 
 const PORT = process.env.PORT || 3000;
 const GOD_PASSWORD = process.env.GOD_PASSWORD || ''; // 为空则关闭上帝模式
@@ -41,6 +42,12 @@ const rooms = new Map();
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.json': 'application/json' };
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
+  if (p.startsWith('/api/games')) {
+    const id = p.split('/')[3];
+    const body = id ? records.get(id) : { games: records.list(), persistent: records.enabled() };
+    res.writeHead(body ? 200 : 404, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });
+    return res.end(JSON.stringify(body || { error: 'not found' }));
+  }
   if (p === '/' || !path.extname(p)) p = '/index.html';
   const file = path.join(PUB, path.normalize(p));
   if (!file.startsWith(PUB)) { res.writeHead(403); return res.end(); }
@@ -152,7 +159,7 @@ function viewFor(room, pid, god) {
     }
   }
   if (g.phase === 'end' || god) v.allRoles = room.players.map((p) => ({ id: p.id, role: room.roles[p.id], art: g.art[p.id] || room.roles[p.id], name: ROLE_NAME[room.roles[p.id]], evil: evilNow(room, p.id) }));
-  if (g.phase === 'end') Object.assign(v, { winner: g.winner, reason: g.reason, assassinTarget: g.assassinTarget });
+  if (g.phase === 'end') Object.assign(v, { winner: g.winner, reason: g.reason, assassinTarget: g.assassinTarget, record: g.record });
   if (god) { v.liveVotes = g.votes; v.liveCards = g.questCards; v.leaderIdx = g.leaderIdx; v.lancelotDeck = g.lancelotDeck; }
   return v;
 }
@@ -237,7 +244,27 @@ function nextLeader(room) {
   if (room.settings.leaderMode === 'random') { let i; do { i = crypto.randomInt(n); } while (n > 1 && i === g.leaderIdx); g.leaderIdx = i; }
   else g.leaderIdx = (g.leaderIdx + 1) % n;
 }
-function endGame(room, winner, reason) { clearSpeech(room); Object.assign(room.game, { phase: 'end', winner, reason }); }
+function endGame(room, winner, reason) {
+  clearSpeech(room); Object.assign(room.game, { phase: 'end', winner, reason });
+  const g = room.game; if (g.saved) return; g.saved = true;
+  // 生成战绩记录（用座位号和昵称，不存 token 等隐私）
+  const seatOf = (id) => room.players.findIndex((p) => p.id === id) + 1;
+  const mapVotes = (v) => Object.fromEntries(Object.entries(v).map(([k, x]) => [seatOf(k), x]));
+  g.record = {
+    id: g.id, code: room.code, endedAt: Date.now(), winner, reason,
+    players: room.players.map((p, i) => ({ seat: i + 1, name: p.name, avatar: p.avatar, role: room.roles[p.id], roleName: ROLE_NAME[room.roles[p.id]], art: g.art[p.id] || room.roles[p.id], evil: evilNow(room, p.id) })),
+    results: g.results, teamSizes: TEAM_SIZES[room.players.length],
+    assassin: g.assassinId ? seatOf(g.assassinId) : null, assassinTarget: g.assassinTarget ? seatOf(g.assassinTarget) : null,
+    settings: { ...room.settings },
+    history: g.history.map((h) => {
+      if (h.type === 'vote') return { ...h, leader: seatOf(h.leader), team: h.team.map(seatOf), votes: mapVotes(h.votes), excalibur: h.excalibur ? seatOf(h.excalibur) : null };
+      if (h.type === 'quest') return { ...h, team: h.team.map(seatOf), excal: h.excal ? { holder: seatOf(h.excal.holder), target: h.excal.target ? seatOf(h.excal.target) : null } : null };
+      if (h.type === 'lady') return { ...h, holder: seatOf(h.holder), target: seatOf(h.target) };
+      return h;
+    }),
+  };
+  records.save(g.record);
+}
 function event(room, e) { room.game.lastEvent = { ...e, seq: ++room.game.seq }; } // 客户端据此弹出票型/任务结果
 
 // 进入组队阶段：兰斯洛特规则 1 从第 3 轮起每次组队翻牌，规则 2 每轮开始翻牌
@@ -580,4 +607,4 @@ setInterval(() => { const t = Date.now(); for (const [c, r] of rooms) if (t - r.
 setInterval(() => wss.clients.forEach((c) => { if (c._alive === false) return c.terminate(); c._alive = false; if (c.readyState === 1) c.ping(); }), 20e3);
 wss.on('connection', (c) => { c._alive = true; c.on('pong', () => { c._alive = true; }); });
 
-server.listen(PORT, () => console.log(`Avalon on http://localhost:${PORT}  god=${GOD_PASSWORD ? 'on' : 'off'}`));
+records.load().finally(() => server.listen(PORT, () => console.log(`Avalon on http://localhost:${PORT}  god=${GOD_PASSWORD ? 'on' : 'off'}  records=${records.enabled() ? 'github' : 'local'}`)));

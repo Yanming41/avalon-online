@@ -78,6 +78,7 @@ function showRole(k) {
 function render() {
   syncRulebook();
   const app = $('#app');
+  if (HISTORY) { app.innerHTML = historyView(); return animateView(app, 'history:' + !!HIST); }
   if (WATCH) { app.innerHTML = tvView(); return animateView(app, 'tv:' + (S ? S.phase : '')); }
   if (!S && SPEC) { app.innerHTML = `<h1>阿瓦隆</h1><div class="banner">${online ? `正在进入观众席（房间 ${esc(SPEC.code)}）…` : '连接中…'}</div><button class="sec" onclick="location.href='/'">返回首页</button>`; return; }
   if (!S) { app.innerHTML = homeView(); return animateView(app, 'home'); }
@@ -105,6 +106,7 @@ function homeView() {
   <input id="cd" placeholder="房间号（4位）" inputmode="numeric" maxlength="4" value="${esc(code)}">
   <button onclick="doJoin()">加入房间</button><div class="mute center">掉线或换了手机？填同一个房间号和原来的昵称就能回到原位，身份不变。</div>
   <button class="sec" onclick="doCreate()">创建新房间</button></div>
+  <button class="sec" onclick="location.href='/?history'">📊 历史战绩 · 复盘</button>
   <div class="card"><details><summary>👀 观众席 / 投屏大屏</summary>
   <input id="wcd" placeholder="房间号" inputmode="numeric" maxlength="4" value="${esc(code)}"><input id="wnm" placeholder="你的名字（观众席用）" maxlength="12" value="${esc(localStorage.name || '')}">
   <div class="row"><button onclick="goSpec()">进入观众席</button><button class="sec" onclick="const c=$('#wcd').value.trim();/^\d{4}$/.test(c)?location.href='/?watch='+c:toast('房间号是 4 位数字')">投屏大屏</button></div>
@@ -121,11 +123,11 @@ function codexView() {
     <div class="fc"><div class="fb">${name.split(' ')[0]}</div><img loading="lazy" src="${imgSrc}" alt="" onerror="this.remove()"><i class="frm"></i><div class="nm2">${name.replace(/^\S+ /, '')}</div><span class="zoom" onclick="event.stopPropagation();showDetail('${key}',this.parentNode.querySelector('img'))">🔍</span></div>
     <div class="bk parch"><div class="bki">${back}</div></div></div></div>`;
   const roleCard = ([k, R]) => card(R.side === 'good' ? 'g' : 'e', img(k), `${R.emo} ${R.name}`,
-    `<b class="t">${R.emo} ${R.name}</b><span class="side">${R.side === 'good' ? '正义阵营' : '邪恶阵营'}</span><p><b>知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p>`, k);
+    `<b class="t">${R.emo} ${R.name}</b><span class="side">${R.side === 'good' ? '正义阵营' : '邪恶阵营'}</span><p><b>知道：</b>${R.know}</p><p><b>何时生效：</b>${R.when || ''}</p><p><b>目标：</b>${R.goal}</p>`, k);
   const roles = Object.entries(ROLES);
   return `<div class="codex"><h2>⚜ 正义阵营 ⚜<small>${WIDE() ? '点一张牌查看大图和能力' : '点一张牌翻面查看能力，点 🔍 看大图'}</small></h2><div class="fgrid">${roles.filter(([, R]) => R.side === 'good').map(roleCard).join('')}</div>
   <h2>⚜ 邪恶阵营 ⚜</h2><div class="fgrid">${roles.filter(([, R]) => R.side === 'evil').map(roleCard).join('')}</div>
-  <h2>⚜ 道具与卡牌 ⚜</h2><div class="fgrid">${Object.entries(ITEMS).map(([k, I]) => card('', `img/items/${k}.webp`, `${I.emo} ${I.name}`, `<b class="t">${I.emo} ${I.name}</b><p>${I.desc}</p>`, 'item:' + k)).join('')}</div></div>`;
+  <h2>⚜ 道具与卡牌 ⚜</h2><div class="fgrid">${Object.entries(ITEMS).map(([k, I]) => card('', `img/items/${k}.webp`, `${I.emo} ${I.name}`, `<b class="t">${I.emo} ${I.name}</b><p>${I.desc}</p><p><b>何时使用：</b>${I.when || ''}</p>`, 'item:' + k)).join('')}</div></div>`;
 }
 function goSpec() {
   const c = $('#wcd').value.trim(), n = $('#wnm').value.trim();
@@ -203,10 +205,10 @@ function togPick(k) {
 const WIDE = () => matchMedia('(hover: hover) and (pointer: fine)').matches && innerWidth >= 700; // 电脑
 function cardClick(el, key) { if (WIDE()) showDetail(key, el.querySelector('img')); else el.classList.toggle('on'); }
 function detailHtml(key) {
-  if (key.startsWith('item:')) { const I = ITEMS[key.slice(5)]; return `<h3>${I.emo} ${I.name}</h3><p>${I.desc}</p>`; }
+  if (key.startsWith('item:')) { const I = ITEMS[key.slice(5)]; return `<h3>${I.emo} ${I.name}</h3><p>${I.desc}</p>${I.when ? `<p class="when"><b>何时使用：</b>${I.when}</p>` : ''}`; }
   const R = ROLES[key]; if (!R) return '';
   return `<h3>${R.emo} ${R.name}</h3><div class="side ${R.side}">${R.side === 'good' ? '正义阵营' : '邪恶阵营'}</div>
-    <p><b>你知道：</b>${R.know}</p><p><b>目标：</b>${R.goal}</p><p><b>玩法建议：</b></p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul>`;
+    <p><b>你知道：</b>${R.know}</p>${R.when ? `<p class="when"><b>何时生效：</b>${R.when}</p>` : ''}<p><b>目标：</b>${R.goal}</p><p><b>玩法建议：</b></p><ul>${R.tips.map((t) => `<li>${t}</li>`).join('')}</ul>`;
 }
 function showDetail(key, from) {
   const src = key.startsWith('item:') ? `img/items/${key.slice(5)}.webp` : img(key);
@@ -664,6 +666,7 @@ function rulesView() {
   <p><b>胜负：</b>好人完成 3 次任务，并且最后梅林没被刺中，好人赢。任务失败 3 次、连续 5 次组队被否决、或者刺客刺中梅林，坏人赢。</p>
   <ol><li><b>组队（发车）：</b>队长按本轮人数选队员（可以选自己）。发车前可以开启「轮流发言」，每人限时发言。</li>
   <li><b>发车投票：</b>所有人投同意或反对，全员投完后一起公布，记入票型表。超过半数同意才算通过；否则下一位当队长，否决计数 +1。</li>
+  <li><b>出牌只在车上：</b>只有被选上车的队员才出任务牌，车下的人不出牌，所以所有「出牌类」能力（魔法、疯子、莽夫等）都只在车上有效；被动能力（看人、被查验时的显示等）不用操作，系统自动生效。</li>
   <li><b>任务：</b>队员匿名出牌，好人只能出成功，坏人可以出成功或失败。出现 1 张失败任务就失败（7 人以上的第 4 轮需要 2 张）。</li>
   <li><b>刺杀：</b>好人完成 3 次任务后，所有坏人亮明身份商量，由刺客选一个人刺杀，刺中梅林则坏人翻盘。</li></ol>
   <p><b>人数配置：</b>5人 3好2坏｜6人 4好2坏｜7人 4好3坏｜8人 5好3坏｜9人 6好3坏｜10人 6好4坏</p>

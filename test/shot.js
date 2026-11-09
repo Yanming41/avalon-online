@@ -60,7 +60,7 @@ const AV = ['🦁','🐺','🦊','🐻','🐼','🐯','🦉'];
   await cdp('Emulation.setDeviceMetricsOverride', { width: 400, height: 1900, deviceScaleFactor: 1, mobile: true });
   fs.writeFileSync(OUT + '/lobby.png', Buffer.from((await cdp('Page.captureScreenshot')).data, 'base64'));
   await cdp('Emulation.setDeviceMetricsOverride', { width: 400, height: 800, deviceScaleFactor: 1, mobile: true });
-  await cdp('Runtime.evaluate', { expression: `scrollTo(0,0);showDetail('revealer')` }); await sleep(800);
+  await cdp('Runtime.evaluate', { expression: `scrollTo(0,0);showDetail('good_sorcerer')` }); await sleep(800);
   fs.writeFileSync(OUT + '/zoom.png', Buffer.from((await cdp('Page.captureScreenshot')).data, 'base64'));
   await cdp('Runtime.evaluate', { expression: `document.querySelector('.lightbox')?.remove()` });
   await cdp('Emulation.setDeviceMetricsOverride', { width: 1600, height: 900, deviceScaleFactor: 1, mobile: false });

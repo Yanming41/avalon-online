@@ -262,6 +262,7 @@ function actionBar() {
     else hint = '好人请保持沉默，别暴露梅林';
   } else if (S.phase === 'end') {
     hint = S.winner === 'good' ? '正义阵营获胜' : '邪恶阵营获胜';
+    side += `<button class="sm sec" onclick="showReplay(S.record)">${ic('scroll')}生成复盘图</button><button class="sm sec" onclick="location.href='/?history'">${ic('book')}历史战绩</button>`;
     if (host || isGod()) main = `<div class="row"><button class="sec" onclick="${isGod() && !host ? "god('lobby')" : "send({t:'lobby'})"}">回到大厅</button><button onclick="${isGod() && !host ? "god('start')" : "send({t:'start'})"}">再来一局</button></div>`;
   }
   if (main && /speechGo/.test(main)) { /* 发言按钮优先 */ } else if (sp && sp.ready && sp.order[sp.idx] === S.me && ['propose', 'vote'].includes(S.phase)) main = `<button class="okb go" onclick="send({t:'speechGo'})">${ic('mic')}开始发言</button>` + main;

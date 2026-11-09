@@ -10,3 +10,7 @@ services:
     envVars:
       - key: GOD_PASSWORD
         sync: false             # 密码不进仓库，在 Render 后台填
+      - key: RECORDS_REPO
+        value: Yanming41/avalon-records
+      - key: RECORDS_GITHUB_TOKEN
+        sync: false             # GitHub 令牌只在 Render 后台填，不进仓库

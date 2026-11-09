@@ -181,3 +181,12 @@ main{padding-bottom:190px!important}
 .rt-cwrap button{pointer-events:auto}
 .rt-center{background:radial-gradient(closest-side,rgba(40,26,12,.85),rgba(40,26,12,.55) 70%,transparent);border-radius:40%;padding:10px 14%}
 .rl{opacity:.9}
+
+/* 复盘图 / 历史战绩 */
+.rp-box{max-width:520px;padding:12px}
+.rp-img{width:100%;border-radius:4px;display:block;margin-bottom:8px;-webkit-touch-callout:default;user-select:auto}
+.btnlink{flex:1;display:block}.btnlink button{width:100%}
+.hist-g{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;padding:10px 4px;border-bottom:1px solid rgba(216,173,85,.18);cursor:pointer}
+.hist-g:active{background:rgba(216,173,85,.08)}
+.hist-g b{font-family:var(--serif);letter-spacing:1px}.hist-g b.good{color:#9cc3ff}.hist-g b.evil{color:#ff8a85}
+.hist-g span{color:#e4d3ae;font-size:13px}.hist-g small{flex-basis:100%;color:var(--mute);font-size:12px}
