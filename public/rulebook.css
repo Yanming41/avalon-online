@@ -30,3 +30,9 @@ body.book-open{overflow:hidden}
 /* 小字号不用细字重：思源宋体 200/300 的细横在小字下会消失（「本」显示成「朩」） */
 #rulebook nav button,#rulebook footer,#rulebook .book-role-link,#rulebook .book-note,#rulebook .book-count,#rulebook small{font-weight:500!important}
 #rulebook article p,#rulebook article li{font-weight:400!important}
+/* 数字放大：改用等高数字（Cormorant 默认是老式数字，会比汉字矮一截） */
+#rulebook,#rulebook *{font-variant-numeric:lining-nums}
+#rulebook .book-count{font-size:20px!important;font-weight:700!important;color:#6b3f12!important;font-family:"Cinzel","Noto Serif SC",serif!important}
+#rulebook .book-intro{font-size:20px}
+#rulebook nav button{font-size:14px}
+#rulebook #book-number{font-size:16px;font-family:"Cinzel",serif}

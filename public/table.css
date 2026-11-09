@@ -131,3 +131,53 @@ main{padding-bottom:190px!important}
 .qd-l{min-width:64px;color:var(--mute);display:inline-flex;align-items:center;gap:2px}.qd-l.yes{color:#9be29b}.qd-l.no{color:#ff8a85}
 .qd-p{display:inline-flex;align-items:center;padding:2px 7px;border-radius:10px;background:rgba(255,255,255,.07);white-space:nowrap}
 .modal{z-index:45!important}
+
+/* 等待开始发言 */
+.wait-go{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;color:#f3d27a;border:2px solid #f3d27a;animation:speakGlow 1.4s ease-in-out infinite;margin-bottom:2px}
+.rt-center .cs-go{width:auto;padding:9px 16px;font-size:15px;margin:4px 0;animation:goPulse 1.6s ease-in-out infinite}
+/* 发言顺序设置 */
+.sp-seats{display:flex;flex-wrap:wrap;gap:5px}
+.sp-seats span{padding:5px 9px;border-radius:14px;border:1px solid rgba(216,173,85,.35);background:rgba(0,0,0,.35);font-size:13px;cursor:pointer}
+.sp-seats span.on{border-color:var(--gold);background:rgba(216,173,85,.25);color:#fff3cf}
+.sp-prev{font:600 15px 'Cinzel',serif;color:#f3d58a;letter-spacing:1px;margin-bottom:8px}
+
+/* 任务详情 v2 */
+.qd .qd-v{padding:12px}
+.qd-title{text-align:center;font-family:var(--serif);font-size:17px;color:#f6e3b2;letter-spacing:1px;margin-bottom:10px}
+.qd-title small{display:block;font-family:inherit;font-size:12px;letter-spacing:0;margin-top:2px;color:var(--mute)}
+.qd-v.ok .qd-title small{color:#9be29b}.qd-v.no .qd-title small{color:#ff8a85}
+.qd-team{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-bottom:10px}
+.qd-team span{font-size:17px;font-weight:700;color:#fff3cf;padding:5px 11px;border-radius:16px;background:rgba(123,196,122,.16);border:1px solid rgba(123,196,122,.5)}
+.qd-boxes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.qd-box{border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:4px;min-height:60px}
+.qd-box.yes{background:rgba(120,170,235,.18);border:1px solid rgba(140,185,245,.55)}
+.qd-box.no{background:rgba(220,80,70,.18);border:1px solid rgba(230,110,100,.55)}
+.qd-bh{font-weight:700;font-size:13px;display:flex;align-items:center;gap:3px;margin-bottom:2px}
+.qd-box.yes .qd-bh{color:#b9d6ff}.qd-box.no .qd-bh{color:#ffb3ac}
+.qd-n{font-size:13px}.qd-none{color:var(--mute);font-size:12px}
+/* 观众席 */
+.specs{text-align:center;font-size:12.5px;color:var(--mute);margin:2px 0 6px}.specs .ic{margin-right:4px}
+
+/* 沙漏 v2：沙粒下落 */
+.hg .hg-stream{stroke-dasharray:none;animation:none;opacity:.85}
+.hg .hg-grain{fill:#f6dc96;animation:grain .7s linear infinite}
+.hg .hg-grain.g2{animation-delay:-.23s;animation-duration:.62s}.hg .hg-grain.g3{animation-delay:-.47s;animation-duration:.78s}
+@keyframes grain{from{transform:translateY(0);opacity:1}to{transform:translateY(26px);opacity:.3}}
+.hg.idle .hg-flow,.hg.done .hg-flow{display:none}
+.hg .hg-glass{fill:rgba(220,235,255,.06)}
+
+/* 推理关系连线 */
+.rt-links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+.seat{z-index:2}
+.rl line{stroke-width:.75;stroke-linecap:round;filter:drop-shadow(0 0 .6px #000)}
+.rl.opp line{stroke:#e0564b;stroke-dasharray:2.2 1.4}
+.rl.same line{stroke:#6fc46e}
+.rl circle{stroke-width:.5}
+.rl.opp circle{fill:#3a0f0c;stroke:#e0564b}.rl.same circle{fill:#0f2a0e;stroke:#6fc46e}
+.rl text{font-size:3.6px;text-anchor:middle;fill:#ffe9c4;font-family:serif}
+.rl.same text{font-size:4.2px}
+
+.rt-cwrap{position:absolute;inset:17%;z-index:2;display:flex;align-items:center;justify-content:center;text-align:center;pointer-events:none}
+.rt-cwrap button{pointer-events:auto}
+.rt-center{background:radial-gradient(closest-side,rgba(40,26,12,.85),rgba(40,26,12,.55) 70%,transparent);border-radius:40%;padding:10px 14%}
+.rl{opacity:.9}

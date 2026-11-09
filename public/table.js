@@ -27,31 +27,53 @@ const ic = (k, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hid
 // ---------- 沙漏计时器 ----------
 // 上半沙子随剩余时间减少、下半堆高、中间一道细沙；最后 10 秒变红抖动；时间到翻转一次
 function hourglass(endsAt, secs, size = 64) {
+  const f0 = endsAt ? Math.max(0, Math.min(1, (endsAt - Date.now() - clockSkew) / 1000 / secs)) : 1;
   return `<div class="hg ${endsAt ? '' : 'idle'}" ${endsAt ? `data-end="${endsAt}"` : ''} data-secs="${secs}" style="width:${size}px;height:${size * 1.5}px">
-  <svg viewBox="0 0 40 60"><defs><linearGradient id="hgSand" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3d58a"/><stop offset="1" stop-color="#c38d32"/></linearGradient>
-    <clipPath id="hgTop"><path d="M9 6h22c0 9-6 14-10 20h-2C15 20 9 15 9 6z"/></clipPath><clipPath id="hgBot"><path d="M19 34h2c4 6 10 11 10 20H9c0-9 6-14 10-20z"/></clipPath></defs>
-    <rect x="5" y="2" width="30" height="4" rx="1.5" class="hg-cap"/><rect x="5" y="54" width="30" height="4" rx="1.5" class="hg-cap"/>
+  <svg viewBox="0 0 40 60"><defs>
+    <linearGradient id="hgSand" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6dc96"/><stop offset=".55" stop-color="#d9a94c"/><stop offset="1" stop-color="#a8752a"/></linearGradient>
+    <linearGradient id="hgShine" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".25" stop-color="#fff" stop-opacity=".28"/><stop offset=".4" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <clipPath id="hgTop"><path d="M9 6h22c0 9-6 14-10 20h-2C15 20 9 15 9 6z"/></clipPath>
+    <clipPath id="hgBot"><path d="M19 34h2c4 6 10 11 10 20H9c0-9 6-14 10-20z"/></clipPath>
+    <clipPath id="hgNeck"><rect x="18.6" y="24" width="2.8" height="31"/></clipPath></defs>
     <path d="M9 6h22c0 9-6 14-10 20v8c4 6 10 11 10 20H9c0-9 6-14 10-20v-8C15 20 9 15 9 6z" class="hg-glass"/>
-    <g clip-path="url(#hgTop)"><rect class="hg-top" x="8" y="6" width="24" height="20" fill="url(#hgSand)"/></g>
-    <g clip-path="url(#hgBot)"><rect class="hg-bot" x="8" y="54" width="24" height="0" fill="url(#hgSand)"/></g>
-    <line class="hg-stream" x1="20" y1="26" x2="20" y2="54" stroke="#e6bf6a" stroke-width="1.2" stroke-dasharray="1.5 2.5"/>
+    <g clip-path="url(#hgTop)"><path class="hg-top" d="${hgTopPath(f0)}" fill="url(#hgSand)"/></g>
+    <g clip-path="url(#hgBot)"><path class="hg-bot" d="${hgBotPath(f0)}" fill="url(#hgSand)"/></g>
+    <g class="hg-flow" clip-path="url(#hgNeck)"><line class="hg-stream" x1="20" y1="25" x2="20" y2="54" stroke="#ecc670" stroke-width="1"/>
+      <circle class="hg-grain g1" cx="20" cy="27" r=".7"/><circle class="hg-grain g2" cx="20.3" cy="27" r=".55"/><circle class="hg-grain g3" cx="19.7" cy="27" r=".6"/></g>
+    <path d="M9 6h22c0 9-6 14-10 20v8c4 6 10 11 10 20H9c0-9 6-14 10-20v-8C15 20 9 15 9 6z" fill="url(#hgShine)" stroke="none"/>
+    <rect x="5" y="2" width="30" height="4" rx="1.5" class="hg-cap"/><rect x="5" y="54" width="30" height="4" rx="1.5" class="hg-cap"/>
     <path d="M7 6v48M33 6v48" class="hg-post"/></svg>
   <div class="hg-t">${endsAt ? '--' : `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`}</div></div>`;
 }
+// 上半沙子：玻璃越靠近瓶颈越窄，沙量 ∝ 高度²，所以高度 = √剩余比例；沙面中间凹下去（被瓶颈吸走）
+function hgTopPath(f) {
+  const h = 20 * Math.sqrt(f), y = 26 - h, dip = Math.min(3.2, 1 + 6 * f * (1 - f) + (f > 0.02 ? 0.8 : 0));
+  if (h < 0.3) return '';
+  return `M4 ${y} Q12 ${y} 20 ${Math.min(26, y + dip)} Q28 ${y} 36 ${y} L36 27 L4 27 Z`;
+}
+// 下半沙子：堆成越来越高的沙丘（中间尖、两边坡）
+function hgBotPath(f) {
+  const p = 1 - f; if (p < 0.005) return '';
+  const top = 54 - 17 * Math.pow(p, 0.7), side = 54 - 9 * Math.pow(p, 0.85);
+  return `M4 55 L4 ${side} Q12 ${side} 20 ${top} Q28 ${side} 36 ${side} L36 55 Z`;
+}
+// 逐帧更新（requestAnimationFrame），沙子连续流动，不是一跳一跳
 function tickHourglass() {
   const now = Date.now() + clockSkew;
   document.querySelectorAll('.hg[data-end]').forEach((el) => {
     const end = +el.dataset.end, secs = +el.dataset.secs, left = Math.max(0, (end - now) / 1000);
-    const f = Math.max(0, Math.min(1, left / secs)); // 剩余比例
+    const f = Math.max(0, Math.min(1, left / secs));
     const top = el.querySelector('.hg-top'), bot = el.querySelector('.hg-bot');
-    if (top) { const h = 20 * f; top.setAttribute('y', 26 - h); top.setAttribute('height', h); }
-    if (bot) { const h = 18 * (1 - f); bot.setAttribute('y', 54 - h); bot.setAttribute('height', h); }
+    if (top) top.setAttribute('d', hgTopPath(f));
+    if (bot) bot.setAttribute('d', hgBotPath(f));
+    const st = el.querySelector('.hg-stream'); if (st) st.setAttribute('y2', 54 - 17 * Math.pow(1 - f, 0.7));
     el.classList.toggle('warn', left > 0 && left <= 10);
     el.classList.toggle('done', left <= 0);
-    const t = el.querySelector('.hg-t'); if (t) { const s = Math.ceil(left); t.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
+    const t = el.querySelector('.hg-t'); if (t) { const s = Math.ceil(left); const txt = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; if (t.textContent !== txt) t.textContent = txt; }
   });
+  requestAnimationFrame(tickHourglass);
 }
-setInterval(tickHourglass, 250);
+requestAnimationFrame(tickHourglass);
 
 // ---------- 头像：纹章图片（兼容旧的 emoji 头像） ----------
 function avH(a, cls = '') {
@@ -129,9 +151,27 @@ function roundTable(center) {
         ${!p.online ? `<span class="offl">${ic('offline')}</span>` : ''}</div>
       <div class="seat-nm">${esc(p.name)}${p.id === S.me ? '<small>（我）</small>' : ''}</div>
       ${role ? `<div class="seat-role">${role.name}</div>` : isGod() && S.allRoles ? '' : seatStatus(p)}
-      ${relChips(p.id) ? `<div class="seat-rel">${relChips(p.id)}</div>` : ''}</div>`;
+      </div>`;
   }).join('');
-  return `<div class="rtable"><div class="rt-board"><div class="rt-center">${center}</div></div>${seats}</div>`;
+  return `<div class="rtable"><div class="rt-board"></div>${relLinks()}<div class="rt-cwrap"><div class="rt-center">${center}</div></div>${seats}</div>`;
+}
+
+// 推理关系连线：同边 = 绿色实线 + 链环，互踩 = 红色虚线 + 交叉剑（只在自己手机上）
+function relLinks() {
+  if (!S.gameId || WATCH || !S.me && !isGod()) return '';
+  const n = S.players.length, R = 41, x = marks();
+  if (!x.r.length) return '';
+  const pos = (id) => { const i = S.players.findIndex((p) => p.id === id); const a = -Math.PI / 2 + (2 * Math.PI * i) / n; return [50 + R * Math.cos(a), 50 + R * Math.sin(a)]; };
+  const cut = n >= 9 ? 6.5 : n >= 7 ? 7.2 : 8; // 线从头像边缘开始，不压在头像上
+  const lines = x.r.map((r) => {
+    if (!S.players.some((p) => p.id === r.a) || !S.players.some((p) => p.id === r.b)) return '';
+    const [x1, y1] = pos(r.a), [x2, y2] = pos(r.b), dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1;
+    const ax = x1 + (dx / L) * cut, ay = y1 + (dy / L) * cut, bx = x2 - (dx / L) * cut, by = y2 - (dy / L) * cut, mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    const opp = r.k === 'opp';
+    return `<g class="rl ${opp ? 'opp' : 'same'}"><line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}"/>
+      <circle cx="${mx}" cy="${my}" r="3.1"/><text x="${mx}" y="${my + 1.25}">${opp ? '⚔' : '∞'}</text></g>`;
+  }).join('');
+  return `<svg class="rt-links" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines}</svg>`;
 }
 
 // ---------- 桌面中央：只说「现在发生什么」 ----------
@@ -140,6 +180,8 @@ function centerStage() {
   const head = (t, sub) => `<div class="cs-t">${t}</div>${sub ? `<div class="cs-s">${sub}</div>` : ''}`;
   if (sp && ['propose', 'vote'].includes(S.phase)) {
     const cur = sp.order[sp.idx];
+    if (sp.ready) return `<div class="wait-go">${ic('mic')}</div><div class="cs-t">${cur === S.me ? '轮到你发言' : `${seat(cur)}号 ${esc(P(cur).name)}`}</div>
+      ${cur === S.me ? `<button class="okb cs-go" onclick="send({t:'speechGo'})">${ic('mic')}开始发言</button>` : `<div class="cs-s">等待 TA 按「开始发言」</div>`}<div class="cs-s">${sp.dir === -1 ? '逆时针' : '顺时针'} · ${sp.idx + 1}/${sp.order.length}</div>`;
     return `${hourglass(sp.endsAt, sp.secs, 38)}<div class="cs-t">${cur === S.me ? '轮到你发言' : `${seat(cur)}号 ${esc(P(cur).name)}`}</div><div class="cs-s">${sp.ready ? '准备中 · 按「开始发言」后计时' : `发言 ${sp.idx + 1}/${sp.order.length}`}</div>`;
   }
   switch (S.phase) {
@@ -148,12 +190,16 @@ function centerStage() {
     case 'quest': return head('执行任务', `${S.questDone.length}/${S.team.length} 已出牌${S.quest === 3 && S.twoFailQuest4 ? ' · 需 2 张失败' : ''}`);
     case 'excalibur': return head('王者之剑', `${seat(S.excalibur)}号 决定是否翻牌`);
     case 'lady': return head('湖中仙女', `${seat(S.lady.holder)}号 正在查验`);
-    case 'assassin': return head('刺杀梅林', `刺客 ${seat(S.assassin)}号 拍板`);
+    case 'assassin': return head('刺杀梅林', S.assassinRandom ? `没有刺客 · 随机抽中 ${seat(S.assassin)}号 拍板` : `刺客 ${seat(S.assassin)}号 拍板`);
     case 'end': return `<div class="cs-t ${S.winner}">${S.winner === 'good' ? '正义阵营获胜' : '邪恶阵营获胜'}</div><div class="cs-s">${esc(S.reason)}</div>`;
   }
   return '';
 }
 
+function centerHint() {
+  const m = { propose: `等待 ${seat(S.leader)}号 组队`, vote: `投票中 ${S.voted.length}/${S.players.length}`, quest: '队员出牌中', excalibur: '王者之剑', lady: '湖中仙女查验中', assassin: '刺杀环节', end: '本局结束' };
+  return m[S.phase] || '';
+}
 // ---------- 底部操作栏：每个阶段只有一个主动作，按钮写明结果 ----------
 function actionBar() {
   const iLead = S.leader === S.me, host = S.me === S.hostId, need = S.teamSizes[S.quest], n = S.players.length;
@@ -170,10 +216,10 @@ function actionBar() {
     if (!sp.ready && (mine || iLead || host)) side += `<button class="sm sec" onclick="send({t:'speechNext'})">${ic('next')}${mine ? '我说完了' : '下一位'}</button>`;
     else if (sp.ready && (iLead || host)) side += `<button class="sm sec" onclick="send({t:'speechNext'})">${ic('next')}跳过 ${seat(cur)}号</button>`;
     if (iLead || host) side += `<button class="sm sec" onclick="send({t:'speechStop'})">${ic('stop')}结束发言</button>`;
-  } else if (['propose', 'vote'].includes(S.phase) && (iLead || host)) side += `<button class="sm sec" onclick="send({t:'speechStart'})">${ic('mic')}开始轮流发言</button>`;
+  } else if (['propose', 'vote'].includes(S.phase) && (iLead || host)) side += `<button class="sm sec" onclick="speechSetup()">${ic('mic')}开始轮流发言</button>`;
 
   const speechHint = sp && sp.ready && ['propose', 'vote'].includes(S.phase) && sp.order[sp.idx] !== S.me ? `等待 ${seat(sp.order[sp.idx])}号 开始发言 · ` : '';
-  if (!S.me) { hint = isGod() ? '上帝视角：在上方选择玩家可代入操作' : '观战中'; }
+  if (!S.me) { hint = isGod() ? '上帝视角：在上方选择玩家可代入操作' : `观众席 · ${centerHint()}`; }
   else if (S.phase === 'propose') {
     if (iLead) {
       const exOpts = [...sel].filter((id) => id !== S.me);
@@ -266,6 +312,7 @@ function gameView() {
   let h = (linkFrom ? `<div class="linkbar" onclick="linkFrom=null;render()">已选 ${seat(linkFrom)}号 ${esc(P(linkFrom).name)}，点另一个人的头像建立关系（点这里取消）</div>` : '');
   h += roleCard() + questTrack();
   h += roundTable(centerStage());
+  if (S.spectators && S.spectators.length) h += `<div class="specs">${ic('eye')}观众席：${S.spectators.map(esc).join('、')}</div>`;
   h += actionBar();
   if (S.phase === 'end') h += timeline();
   h += infoCard() + voteMatrix() + notesPanel();
@@ -274,10 +321,10 @@ function gameView() {
 
 // ---------- 大厅：预设板子 ----------
 const PRESETS = [
-  { name: '新手标准局', sub: '5–10 人 · 梅林 刺客 派西维尔 莫甘娜', s: { percival: true, morgana: true, mordred: false, oberon: false, cleric: false, troublemaker: false, lunatic: false, brute: false, revealer: false, trickster: false, sorcerer: false, lancelot: 0, lady: false, excalibur: false }, art: ['merlin', 'percival', 'morgana', 'assassin'] },
-  { name: '进阶局', sub: '7 人起 · 加莫德雷德 · 湖中仙女', s: { percival: true, morgana: true, mordred: true, oberon: false, cleric: false, troublemaker: false, lunatic: false, brute: false, revealer: false, trickster: false, sorcerer: false, lancelot: 0, lady: true, excalibur: false }, art: ['merlin', 'percival', 'mordred', 'morgana'] },
-  { name: '兰斯洛特局', sub: '8 人起 · 双兰斯洛特规则 2 · 湖中仙女', s: { percival: true, morgana: true, mordred: false, oberon: false, cleric: false, troublemaker: false, lunatic: false, brute: false, revealer: false, trickster: false, sorcerer: false, lancelot: 2, lady: true, excalibur: false }, art: ['good_lancelot', 'evil_lancelot', 'merlin', 'morgana'] },
-  { name: '混沌局', sub: '10 人 · 牧师 捣蛋鬼 疯子 诡术师 · 王者之剑', s: { percival: true, morgana: false, mordred: false, oberon: false, cleric: true, troublemaker: true, lunatic: true, brute: false, revealer: false, trickster: true, sorcerer: false, lancelot: 0, lady: false, excalibur: true }, art: ['cleric', 'troublemaker', 'lunatic', 'trickster'] },
+  { name: '新手标准局', sub: '5–10 人 · 梅林 刺客 派西维尔 莫甘娜', s: { percival: true, morgana: true, mordred: false, oberon: false, cleric: false, troublemaker: false, lunatic: false, brute: false, revealer: false, trickster: false, good_sorcerer: false, evil_sorcerer: false, assassin: true, lancelot: 0, lady: false, excalibur: false }, art: ['merlin', 'percival', 'morgana', 'assassin'] },
+  { name: '进阶局', sub: '7 人起 · 加莫德雷德 · 湖中仙女', s: { percival: true, morgana: true, mordred: true, oberon: false, cleric: false, troublemaker: false, lunatic: false, brute: false, revealer: false, trickster: false, good_sorcerer: false, evil_sorcerer: false, assassin: true, lancelot: 0, lady: true, excalibur: false }, art: ['merlin', 'percival', 'mordred', 'morgana'] },
+  { name: '兰斯洛特局', sub: '8 人起 · 双兰斯洛特规则 2 · 湖中仙女', s: { percival: true, morgana: true, mordred: false, oberon: false, cleric: false, troublemaker: false, lunatic: false, brute: false, revealer: false, trickster: false, good_sorcerer: false, evil_sorcerer: false, assassin: true, lancelot: 2, lady: true, excalibur: false }, art: ['good_lancelot', 'evil_lancelot', 'merlin', 'morgana'] },
+  { name: '混沌局', sub: '10 人 · 牧师 捣蛋鬼 疯子 诡术师 · 王者之剑', s: { percival: true, morgana: false, mordred: false, oberon: false, cleric: true, troublemaker: true, lunatic: true, brute: false, revealer: false, trickster: true, good_sorcerer: false, evil_sorcerer: false, assassin: true, lancelot: 0, lady: false, excalibur: true }, art: ['cleric', 'troublemaker', 'lunatic', 'trickster'] },
 ];
 function presetsView(host) {
   const st = S.settings;
@@ -292,15 +339,38 @@ function questDetail(i) {
   const q = S.history.find((h) => h.type === 'quest' && h.quest === i);
   const chip = (id) => `<span class="qd-p">${avH(P(id).avatar, 'mini')}${seat(id)}号 ${esc(P(id).name)}</span>`;
   const ids = (o, v) => Object.keys(o).filter((k) => !!o[k] === v).sort((a, b) => seat(a) - seat(b));
-  const voteBlock = (v) => `<div class="qd-v ${v.ok ? 'ok' : 'no'}">
-    <div class="qd-h">第 ${v.attempt} 次组队 · 队长 ${chip(v.leader)} · <b>${v.ok ? '通过' : '否决'}</b></div>
-    <div class="qd-row"><span class="qd-l">车上</span>${v.team.slice().sort((a, b) => seat(a) - seat(b)).map(chip).join('')}</div>
-    <div class="qd-row"><span class="qd-l yes">${ic('check')}同意 ${ids(v.votes, true).length}</span>${ids(v.votes, true).map(chip).join('') || '<span class="mute">无</span>'}</div>
-    <div class="qd-row"><span class="qd-l no">${ic('cross')}反对 ${ids(v.votes, false).length}</span>${ids(v.votes, false).map(chip).join('') || '<span class="mute">无</span>'}</div></div>`;
+  const voteBlock = (v) => {
+    const yes = ids(v.votes, true), no = ids(v.votes, false);
+    const name = (id) => `<span class="qd-n">${avH(P(id).avatar, 'mini')}${seat(id)}号 ${esc(P(id).name)}</span>`;
+    return `<div class="qd-v ${v.ok ? 'ok' : 'no'}">
+    <div class="qd-title">${avH(P(v.leader).avatar, 'mini')}${seat(v.leader)}号 ${esc(P(v.leader).name)} 的发车<small>第 ${v.attempt} 次组队 · ${v.ok ? '通过' : '否决'}</small></div>
+    <div class="qd-team">${v.team.slice().sort((a, b) => seat(a) - seat(b)).map((id) => `<span>${avH(P(id).avatar, 'mini')}${seat(id)}号 ${esc(P(id).name)}</span>`).join('')}</div>
+    <div class="qd-boxes"><div class="qd-box yes"><div class="qd-bh">${ic('check')}同意 ${yes.length}</div>${yes.map(name).join('') || '<span class="qd-none">无</span>'}</div>
+    <div class="qd-box no"><div class="qd-bh">${ic('cross')}反对 ${no.length}</div>${no.map(name).join('') || '<span class="qd-none">无</span>'}</div></div></div>`;
+  };
   const res = q ? `<div class="qd-res ${q.success ? 'ok' : 'fail'}">${ic(q.success ? 'grail' : 'dagger')}<b>任务${q.success ? '成功' : '失败'}</b><span>${q.fails} 张失败${q.magics ? ` · ${q.magics} 张魔法` : ''}${q.need === 2 ? ' · 本轮需 2 张失败' : ''}</span>
     ${q.excal ? `<small>${q.excal.target ? `王者之剑：${seat(q.excal.holder)}号 翻了 ${seat(q.excal.target)}号 的牌` : `王者之剑：${seat(q.excal.holder)}号 没有使用`}</small>` : ''}</div>` : '<div class="qd-res">这一轮还没出结果</div>';
   $('#modal').innerHTML = `<div class="modal" onclick="if(event.target===this)closeModal()"><div class="box qd">
     <h3 style="margin:0 0 8px;font-family:var(--serif);color:var(--gold);letter-spacing:2px">第 ${i + 1} 轮任务 · ${S.teamSizes[i]} 人</h3>${res}
     ${votes.slice().reverse().map(voteBlock).join('')}
     <button class="sec" onclick="closeModal()">关闭</button></div></div>`;
+}
+
+// ---------- 发言顺序设置：队长指定从谁开始、顺时针 / 逆时针 ----------
+let spStart = null, spDir = 1;
+function speechSetup() {
+  const n = S.players.length, li = S.players.findIndex((p) => p.id === S.leader);
+  if (!spStart || !S.players.some((p) => p.id === spStart)) spStart = S.players[(li + spDir + n) % n].id;
+  const order = () => { const s = S.players.findIndex((p) => p.id === spStart); return Array.from({ length: n }, (_, i) => S.players[(s + spDir * i + n * n) % n]); };
+  const draw = () => {
+    $('#modal').innerHTML = `<div class="modal" onclick="if(event.target===this)closeModal()"><div class="box spset">
+      <h3 style="margin:0 0 8px;font-family:var(--serif);color:var(--gold);letter-spacing:2px">发言顺序</h3>
+      <div class="row"><button class="${spDir === 1 ? '' : 'sec'}" onclick="spDir=1;spStart=null;speechSetup()">顺时针 ↻</button><button class="${spDir === -1 ? '' : 'sec'}" onclick="spDir=-1;spStart=null;speechSetup()">逆时针 ↺</button></div>
+      <div class="mute" style="margin:8px 0 4px">从谁开始（默认队长的${spDir === 1 ? '下一位' : '上一位'}，队长最后总结）：</div>
+      <div class="sp-seats">${S.players.map((p, i) => `<span class="${p.id === spStart ? 'on' : ''}" onclick="spStart='${p.id}';speechSetup()">${avH(p.avatar, 'mini')}${i + 1}号 ${esc(p.name)}</span>`).join('')}</div>
+      <div class="mute" style="margin:8px 0 4px">顺序预览：</div><div class="sp-prev">${order().map((p) => `${seat(p.id)}`).join(' → ')}</div>
+      <button class="okb" onclick="send({t:'speechStart',start:spStart,dir:spDir});closeModal()">${ic('mic')}按这个顺序开始</button>
+      <button class="sec" onclick="closeModal()">取消</button></div></div>`;
+  };
+  draw();
 }

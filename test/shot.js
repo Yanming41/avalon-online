@@ -56,7 +56,7 @@ const AV = ['🦁','🐺','🦊','🐻','🐼','🐯','🦉'];
   await cdp('Runtime.evaluate', { expression: `document.querySelectorAll('.flip')[1].classList.add('on');document.querySelectorAll('.flip')[14].classList.add('on')` }); await sleep(900);
   fs.writeFileSync(OUT + '/home.png', Buffer.from((await cdp('Page.captureScreenshot')).data, 'base64'));
   await cdp('Runtime.evaluate', { expression: `document.querySelector('.flip.on')&&document.querySelectorAll('.flip.on').forEach(e=>e.classList.remove('on'));document.getElementById('nm').value='测试';doCreate()` }); await sleep(1200);
-  await cdp('Runtime.evaluate', { expression: `setS({cleric:true,lunatic:true,lancelot:2})` }); await sleep(600);
+  await cdp('Runtime.evaluate', { expression: `setS({cleric:true,lunatic:true,lancelot:2,assassin:false,good_sorcerer:true})` }); await sleep(600);
   await cdp('Emulation.setDeviceMetricsOverride', { width: 400, height: 1900, deviceScaleFactor: 1, mobile: true });
   fs.writeFileSync(OUT + '/lobby.png', Buffer.from((await cdp('Page.captureScreenshot')).data, 'base64'));
   await cdp('Emulation.setDeviceMetricsOverride', { width: 400, height: 800, deviceScaleFactor: 1, mobile: true });

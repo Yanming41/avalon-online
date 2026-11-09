@@ -8,6 +8,9 @@ const tx = (c, o) => c.w.send(JSON.stringify(o));
   const cl = []; const tag = 'w' + Date.now();
   for (let i = 0; i < 7; i++) { const c = await mk(); cl.push(c); tx(c, { t: i ? 'join' : 'create', code: cl[0].code, name: 'W' + i, token: tag + i }); await sleep(60); }
   const tv = await mk(); tx(tv, { t: 'watch', code: cl[0].code }); await sleep(80);
+  const fan = await mk(); tx(fan, { t: 'watch', code: cl[0].code, name: '路人甲' }); await sleep(100);
+  assert(cl[0].s.spectators && cl[0].s.spectators.includes('路人甲') && !cl[0].s.spectators.includes(null), '观众席的名字显示给玩家（投屏大屏不算观众）');
+  assert(fan.s && fan.s.watch && !fan.s.myRole, '观众席进入房间，没有身份');
   assert(tv.s && tv.s.watch && tv.s.players.length === 7, '观战位进入房间，看到玩家列表');
   assert(tv.s.players.length === 7 && cl[0].s.players.length === 7, '观战位不占玩家位置');
   tx(cl[0], { t: 'settings', settings: { lady: true } }); await sleep(50);
@@ -24,7 +27,7 @@ const tx = (c, o) => c.w.send(JSON.stringify(o));
     else if (s.phase === 'assassin') { const a = by(s.assassin); if (!a.s.evilTeam) { await sleep(200); continue; } tx(a, { t: 'suggest', id: s.players[0].id }); await sleep(60); tx(a, { t: 'assassinate', id: a.s.players.find((p) => !a.s.evilTeam.includes(p.id)).id }); }
     await sleep(60);
   }
-  const leaked = tv.all.filter((v) => v.phase !== 'end' && (v.myRole || v.allRoles || v.liveVotes || v.evilSuggest || v.evilTeam || v.myPin || v.pins || (v.myChecks && v.myChecks.length)));
+  const leaked = [...tv.all, ...fan.all].filter((v) => v.phase !== 'end' && (v.myRole || v.allRoles || v.liveVotes || v.evilSuggest || v.evilTeam || v.myPin || v.pins || (v.myChecks && v.myChecks.length)));
   assert(tv.all.length > 10 && leaked.length === 0, `观战位全程没有拿到任何私密信息（检查了 ${tv.all.length} 个状态）`);
   assert(tv.all.some((v) => v.phase === 'assassin'), '观战位能看到刺杀环节');
   assert(tv.s.phase === 'end' && tv.s.allRoles, '结束后观战位看到身份揭晓');

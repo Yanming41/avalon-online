@@ -22,13 +22,15 @@ const ROLE_NAME = {
 };
 const EVIL_ROLES = new Set(['assassin', 'morgana', 'mordred', 'oberon', 'minion', 'lunatic', 'brute', 'revealer', 'trickster', 'evil_sorcerer', 'evil_lancelot']);
 // 大厅里可勾选的单个角色（阵营）；lancelot / sorcerer 是成对的
-const OPT_GOOD = ['percival', 'cleric', 'troublemaker'];
-const OPT_EVIL = ['morgana', 'mordred', 'oberon', 'lunatic', 'brute', 'revealer', 'trickster'];
+const OPT_GOOD = ['percival', 'cleric', 'troublemaker', 'good_sorcerer'];
+const OPT_EVIL = ['assassin', 'morgana', 'mordred', 'oberon', 'lunatic', 'brute', 'revealer', 'trickster', 'evil_sorcerer'];
 const AVATARS = ['lion', 'eagle', 'dragon', 'stag', 'wolf', 'bear', 'boar', 'griffin', 'unicorn', 'raven', 'owl', 'fox', 'horse', 'falcon', 'serpent', 'swan', 'tower', 'rose', 'sun', 'moon'];
 const OLD_AVATARS = ['🦁', '🐺', '🦊', '🐻', '🐼', '🐯', '🦉', '🦅', '🐉', '🦄', '🐸', '🐙', '🦈', '🐢', '🦌', '🐗', '🐰', '🐱', '🐶', '🐧'];
 const DEFAULT_SETTINGS = {
   percival: true, morgana: true, mordred: false, oberon: false, cleric: false, troublemaker: false,
-  lunatic: false, brute: false, revealer: false, trickster: false, sorcerer: false,
+  lunatic: false, brute: false, revealer: false, trickster: false, good_sorcerer: false, evil_sorcerer: false, assassin: true,
+  leaderMode: 'seq', // seq 按座位顺序 / random 每轮随机
+  clericTiming: 'start', // start 开局查首任队长 / propose 首次发车后查发车的队长
   lancelot: 0, // 0 关闭，1/2/3 对应三套兰斯洛特规则
   lady: false, excalibur: false, speechSecs: 90,
 };
@@ -69,9 +71,8 @@ function loyaltyShown(room, pid) {
 }
 
 function buildRoles(n, s) {
-  const evil = ['assassin', ...OPT_EVIL.filter((k) => s[k])];
+  const evil = OPT_EVIL.filter((k) => s[k]);
   const good = ['merlin', ...OPT_GOOD.filter((k) => s[k])];
-  if (s.sorcerer) { evil.push('evil_sorcerer'); good.push('good_sorcerer'); }
   if (s.lancelot) { evil.push('evil_lancelot'); good.push('good_lancelot'); }
   const E = EVIL_COUNT[n], G = n - E;
   if (evil.length > E) return { error: `${n} 人局只有 ${E} 个坏人，现在选了 ${evil.length} 个坏人角色` };
@@ -94,7 +95,7 @@ function knowledge(room, pid) {
     else if (g.lancelotRule === 3 && isLancelot(me) && isLancelot(r)) out.push({ id: p.id, tag: '另一个兰斯洛特' });
     else if (seenByEvil(me) && me !== 'evil_lancelot' && seenByEvil(r)) out.push({ id: p.id, tag: r === 'evil_lancelot' ? '邪恶兰斯洛特' : '同伙' });
   }
-  if (me === 'cleric' && g.clericSaw) out.push({ id: g.clericSaw.id, tag: `首任队长·${g.clericSaw.evil ? '坏人' : '好人'}` });
+  if (me === 'cleric' && g.clericSaw) out.push({ id: g.clericSaw.id, tag: `${g.clericSaw.when === 'propose' ? '首次发车的队长' : '首任队长'}·${g.clericSaw.evil ? '坏人' : '好人'}` });
   return out;
 }
 
@@ -115,6 +116,7 @@ function viewFor(room, pid, god) {
     code: room.code, hostId: room.hostId, me: pid, god: !!god, now: Date.now(), settings: room.settings,
     players: room.players.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, online: !!p.ws })),
     phase: g ? g.phase : 'lobby', godEnabled: !!GOD_PASSWORD,
+    spectators: [...room.watchers].filter((w) => w._wname && w.readyState === 1).map((w) => w._wname),
   };
   const me = room.players.find((p) => p.id === pid);
   if (!g) return v;
@@ -140,8 +142,9 @@ function viewFor(room, pid, god) {
   }
   if (g.phase === 'vote' && g.votes[pid] !== undefined) v.myVote = g.votes[pid];
   if (g.phase === 'quest' && g.team.includes(pid)) { v.myCards = allowedCards(room, pid); if (g.questCards[pid] !== undefined) v.myCard = true; }
+  if (g.phase === 'assassin' || g.phase === 'end') v.assassinRandom = !!g.assassinRandom;
   if (g.phase === 'assassin') {
-    v.assassin = room.players.find((p) => room.roles[p.id] === 'assassin').id;
+    v.assassin = g.assassinId;
     // 刺杀环节：当前坏人阵营全部亮明身份，一起商量刺谁
     if ((role && evilNow(room, pid)) || god) {
       v.evilTeam = room.players.filter((p) => evilNow(room, p.id)).map((p) => p.id);
@@ -172,10 +175,13 @@ const err = (ws, m) => ws.send(JSON.stringify({ t: 'error', m }));
 
 // ---------- 发言计时 ----------
 function clearSpeech(room) { const g = room.game; clearTimeout(room.speechTimer); if (g) g.speech = null; }
-function startSpeech(room) {
+function startSpeech(room, startId, dir) {
   const g = room.game; const n = room.players.length;
-  const order = []; for (let i = 1; i <= n; i++) order.push(room.players[(g.leaderIdx + i) % n].id); // 从队长下家开始，队长最后总结
-  g.speech = { order, idx: -1, secs: room.settings.speechSecs };
+  const d = dir === -1 ? -1 : 1;
+  let s = room.players.findIndex((p) => p.id === startId);
+  if (s < 0) s = (g.leaderIdx + d + n) % n; // 默认从队长的下一位开始，队长最后总结
+  const order = []; for (let i = 0; i < n; i++) order.push(room.players[(s + d * i + n * n) % n].id);
+  g.speech = { order, idx: -1, secs: room.settings.speechSecs, dir: d };
   nextSpeaker(room);
 }
 function armSpeechTimer(room) {
@@ -221,12 +227,16 @@ function startGame(room) {
   if (s.lady) { g.ladyHolder = room.players[(leaderIdx - 1 + n) % n].id; g.ladyUsed = [g.ladyHolder]; } // 首任队长右手边（上家）
   const first = room.players[leaderIdx].id;
   const cleric = room.players.find((p) => room.roles[p.id] === 'cleric');
-  if (cleric && cleric.id !== first) g.clericSaw = { id: first, evil: loyaltyShown(room, first) };
+  if (cleric && cleric.id !== first && s.clericTiming !== 'propose') g.clericSaw = { id: first, evil: loyaltyShown(room, first), when: 'start' };
   if (g.lancelotRule === 1) g.lancelotDeck = shuffle(['switch', 'switch', 'stay', 'stay', 'stay']);
   if (g.lancelotRule === 2) g.lancelotDeck = shuffle(['switch', 'switch', 'stay', 'stay', 'stay', 'stay', 'stay']).slice(0, 5);
   enterPropose(room, true);
 }
-function nextLeader(room) { const g = room.game; g.leaderIdx = (g.leaderIdx + 1) % room.players.length; }
+function nextLeader(room) {
+  const g = room.game, n = room.players.length;
+  if (room.settings.leaderMode === 'random') { let i; do { i = crypto.randomInt(n); } while (n > 1 && i === g.leaderIdx); g.leaderIdx = i; }
+  else g.leaderIdx = (g.leaderIdx + 1) % n;
+}
 function endGame(room, winner, reason) { clearSpeech(room); Object.assign(room.game, { phase: 'end', winner, reason }); }
 function event(room, e) { room.game.lastEvent = { ...e, seq: ++room.game.seq }; } // 客户端据此弹出票型/任务结果
 
@@ -272,7 +282,7 @@ function handle(room, pid, msg, ws) {
       g.trickShowEvil[pid] = !!msg.evil; break;
     case 'speechStart':
       if (!g || !['propose', 'vote'].includes(g.phase) || (pid !== leaderId && !isHost)) return;
-      startSpeech(room); break;
+      startSpeech(room, msg.start, msg.dir); break;
     case 'speechNext': {
       if (!g || !g.speech) return;
       const cur = g.speech.order[g.speech.idx];
@@ -296,7 +306,13 @@ function handle(room, pid, msg, ws) {
         if (!team.includes(msg.excalibur) || msg.excalibur === pid) return err(ws, '王者之剑要交给车上的一名队员（不能给自己）');
         g.excalibur = msg.excalibur;
       }
-      g.team = team; g.votes = {}; g.phase = 'vote'; break;
+      g.team = team; g.votes = {}; g.phase = 'vote';
+      if (room.settings.clericTiming === 'propose' && !g.clericDone) { // 第一次发车后，牧师查这位发车的队长
+        g.clericDone = true;
+        const cl = room.players.find((p) => room.roles[p.id] === 'cleric');
+        if (cl && cl.id !== pid) g.clericSaw = { id: pid, evil: loyaltyShown(room, pid), when: 'propose' };
+      }
+      break;
     }
     case 'unpropose': // 队长投票前反悔重选
       if (!g || g.phase !== 'vote' || leaderId !== pid || Object.keys(g.votes).length) return;
@@ -343,7 +359,7 @@ function handle(room, pid, msg, ws) {
       if (!g || g.phase !== 'assassin' || !evilNow(room, pid)) return;
       g.evilSuggest[pid] = msg.id; break;
     case 'assassinate': {
-      if (!g || g.phase !== 'assassin' || room.roles[pid] !== 'assassin') return;
+      if (!g || g.phase !== 'assassin' || g.assassinId !== pid) return;
       doAssassinate(room, msg.id, ws); break;
     }
     default: return;
@@ -352,7 +368,10 @@ function handle(room, pid, msg, ws) {
 }
 
 function applySettings(room, s) {
-  for (const k of [...OPT_GOOD, ...OPT_EVIL, 'sorcerer', 'lady', 'excalibur']) if (k in s) room.settings[k] = !!s[k];
+  if ('sorcerer' in s) { s.good_sorcerer = s.evil_sorcerer = !!s.sorcerer; } // 兼容旧版成对开关
+  for (const k of [...OPT_GOOD, ...OPT_EVIL, 'lady', 'excalibur']) if (k in s) room.settings[k] = !!s[k];
+  if ('leaderMode' in s) room.settings.leaderMode = s.leaderMode === 'random' ? 'random' : 'seq';
+  if ('clericTiming' in s) room.settings.clericTiming = s.clericTiming === 'propose' ? 'propose' : 'start';
   if ('lancelot' in s) room.settings.lancelot = [0, 1, 2, 3].includes(+s.lancelot) ? +s.lancelot : 0;
   if ('speechSecs' in s) room.settings.speechSecs = Math.max(15, Math.min(600, parseInt(s.speechSecs) || 90));
 }
@@ -386,12 +405,21 @@ function finishQuest(room, excal) {
   // 暴露者：第二次任务失败后公开身份
   if (!success && losses === 2) for (const p of room.players) if (room.roles[p.id] === 'revealer' && !g.revealed.includes(p.id)) g.revealed.push(p.id);
   if (losses >= 3) return endGame(room, 'evil', '3 次任务失败，坏人获胜');
-  if (wins >= 3) { clearSpeech(room); g.phase = 'assassin'; g.evilSuggest = {}; return; }
+  if (wins >= 3) { clearSpeech(room); enterAssassin(room); return; }
   // 湖中仙女：第 2、3、4 轮任务结束后使用
   if (room.settings.lady && g.quest >= 1 && g.quest <= 3) { clearSpeech(room); g.phase = 'lady'; return; }
   g.quest++; nextLeader(room); enterPropose(room, true);
 }
 
+function enterAssassin(room) {
+  const g = room.game;
+  g.phase = 'assassin'; g.evilSuggest = {};
+  const a = room.players.find((p) => room.roles[p.id] === 'assassin' && evilNow(room, p.id));
+  const evils = room.players.filter((p) => evilNow(room, p.id));
+  g.assassinId = a ? a.id : evils.length ? evils[crypto.randomInt(evils.length)].id : null; // 没有刺客：随机一名坏人来刺
+  g.assassinRandom = !a;
+  if (!g.assassinId) endGame(room, 'good', '场上没有坏人可以刺杀，好人获胜');
+}
 function doAssassinate(room, id, ws) {
   const g = room.game;
   const target = room.players.find((p) => p.id === id);
@@ -458,7 +486,7 @@ function godAction(room, msg, ws) {
     if (g.phase === 'excalibur') finishQuest(room, { holder: g.excalibur, target: null });
     else if (g.phase === 'lady') { g.quest++; nextLeader(room); enterPropose(room, true); }
   } else if (a === 'swapLancelot') { g.lancelotSwapped = !g.lancelotSwapped; }
-  else if (a === 'toAssassin') { clearSpeech(room); g.phase = 'assassin'; g.evilSuggest = {}; }
+  else if (a === 'toAssassin') { clearSpeech(room); enterAssassin(room); }
   else if (a === 'end') endGame(room, msg.winner === 'good' ? 'good' : 'evil', '上帝裁定结束');
   else if (a === 'speechSkip') nextSpeaker(room);
   else if (a === 'speechAdd') { if (g.speech && g.speech.endsAt) { g.speech.endsAt += 30e3; armSpeechTimer(room); } }
@@ -511,6 +539,7 @@ wss.on('connection', (ws, req) => {
       if (!r) return err(ws, '房间不存在');
       if (room && room !== r) { room.watchers.delete(ws); room.gods.delete(ws); }
       room = r; room.watchers.add(ws);
+      ws._wname = String(msg.name || '').trim().slice(0, 12) || null; // 有名字 = 观众席；没名字 = 投屏大屏
       return broadcast(room);
     }
     if (msg.t === 'god') {

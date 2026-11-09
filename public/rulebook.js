@@ -17,7 +17,7 @@ function openRulebook() {
   const modules = [];
   if (S.settings.lady) modules.push(['湖中仙女', ITEMS.lady.desc]);
   if (S.settings.excalibur) modules.push(['王者之剑', ITEMS.excalibur.desc + '魔法牌不受翻转影响。']);
-  if (counts.good_sorcerer || counts.evil_sorcerer) modules.push(['巫师 · 魔法牌', ITEMS.quest_magic.desc + '两位巫师都只能出成功或魔法。']);
+  if (counts.good_sorcerer || counts.evil_sorcerer) modules.push(['巫师 · 魔法牌', ITEMS.quest_magic.desc + '巫师（正义、邪恶可以单独出现）只能出成功或魔法。']);
   if (S.lancelot) modules.push(['兰斯洛特 · 规则 ' + S.lancelot.rule, {
     1: '5 张忠诚牌中有 2 张换阵营。从第 3 轮起，每次组队翻 1 张（队伍被否决后重新组队也翻），牌用完即止。翻到换阵营时，两位兰斯洛特一起换边。',
     2: '7 张忠诚牌中有 2 张换阵营，随机抽取 5 张；每轮任务开始组队时翻 1 张。同一轮重新组队不再翻。两位兰斯洛特按当前阵营行动。',
