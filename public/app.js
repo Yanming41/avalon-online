@@ -2,9 +2,10 @@ const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
 const token = localStorage.token || (localStorage.token = uuid());
-const AVATARS = ['🦁', '🐺', '🦊', '🐻', '🐼', '🐯', '🦉', '🦅', '🐉', '🦄', '🐸', '🐙', '🦈', '🐢', '🦌', '🐗', '🐰', '🐱', '🐶', '🐧'];
+const AVATARS = ['lion', 'eagle', 'dragon', 'stag', 'wolf', 'bear', 'boar', 'griffin', 'unicorn', 'raven', 'owl', 'fox', 'horse', 'falcon', 'serpent', 'swan', 'tower', 'rose', 'sun', 'moon'];
+const CREST_EMO = {"lion": "🦁", "eagle": "🦅", "dragon": "🐉", "stag": "🦌", "wolf": "🐺", "bear": "🐻", "boar": "🐗", "griffin": "🦅", "unicorn": "🦄", "raven": "🐦\u200d⬛", "owl": "🦉", "fox": "🦊", "horse": "🐎", "falcon": "🦅", "serpent": "🐍", "swan": "🦢", "tower": "🏰", "rose": "🌹", "sun": "☀️", "moon": "🌙"};
 let ws, S = null, sel = new Set(), reveal = false, online = false, clockSkew = 0, showGuide = false;
-let myAvatar = localStorage.avatar || AVATARS[Math.floor(Math.random() * AVATARS.length)];
+let myAvatar = AVATARS.includes(localStorage.avatar) ? localStorage.avatar : AVATARS[Math.floor(Math.random() * AVATARS.length)];
 
 function toast(m, ok) { const t = $('#toast'); t.textContent = m; t.style.background = ok ? 'var(--ok)' : 'var(--evil)'; t.style.display = 'block'; t.classList.remove('out'); t.classList.remove('in'); void t.offsetWidth; t.classList.add('in'); clearTimeout(t._h); t._h = setTimeout(() => { t.classList.add('out'); setTimeout(() => (t.style.display = 'none'), 260); }, 2800); }
 function send(o) {
@@ -50,7 +51,7 @@ function connect() {
 document.addEventListener('visibilitychange', () => { if (!document.hidden && ws && ws.readyState > 1) connect(); });
 
 const P = (id) => S.players.find((p) => p.id === id) || { name: '?', avatar: '❔' };
-const nm = (id) => `${P(id).avatar}${esc(P(id).name)}`;
+const nm = (id) => `${avH(P(id).avatar, 'mini')}${esc(P(id).name)}`;
 const seat = (id) => S.players.findIndex((p) => p.id === id) + 1;
 const isGod = () => S && S.god;
 
@@ -80,8 +81,8 @@ function render() {
   if (!S) { app.innerHTML = homeView(); return animateView(app, 'home'); }
   const meP = S.players.find((p) => p.id === S.me);
   let h = `<div class="top"><span class="dot ${online ? '' : 'off'}"></span>房间 <b>${S.code}</b>
-    ${meP ? `· ${meP.avatar} ${esc(meP.name)}${S.me === S.hostId ? '（房主）' : ''}` : ''}${isGod() ? (S.viewAs ? ` · <b style="color:#c9a6ff">👁 代入 ${esc(P(S.viewAs).name)}</b>` : ' · <b style="color:#c9a6ff">👁 上帝</b>') : ''}
-    <span class="sp"><span onclick="toggleMute()" style="cursor:pointer;font-size:16px">${muted ? '🔇' : '🔔'}</span>${S.gameId ? '<button class="sm sec book-trigger" onclick="openRulebook()" aria-haspopup="dialog">📖 本局规则书</button>' : ''}</span></div>`;
+    ${meP ? `· ${avH(meP.avatar, 'mini')} ${esc(meP.name)}${S.me === S.hostId ? '（房主）' : ''}` : ''}${isGod() ? (S.viewAs ? ` · <b style="color:#c9a6ff">👁 代入 ${esc(P(S.viewAs).name)}</b>` : ' · <b style="color:#c9a6ff">👁 上帝</b>') : ''}
+    <span class="sp"><span class="tbtn" onclick="toggleMute()">${ic(muted ? 'mute' : 'bell')}</span>${S.gameId ? '<button class="sm sec book-trigger" onclick="openRulebook()" aria-haspopup="dialog">📖 本局规则书</button>' : ''}</span></div>`;
   if (!online) h += `<div class="banner" style="background:#5e1d1d;color:#fff">连接断开，正在自动重连…</div>`;
   if (isGod()) h += viewAsBar();
   h += S.phase === 'lobby' ? lobbyView() : gameView();
@@ -97,7 +98,7 @@ function render() {
 function homeView() {
   const code = new URLSearchParams(location.search).get('r') || localStorage.room || '';
   return `<h1>阿瓦隆</h1><div class="sub" style="font-family:var(--serif);letter-spacing:3px">卡美洛的忠臣与莫德雷德的爪牙</div>
-  <div class="card"><h3>选个头像</h3><div class="avpick">${AVATARS.map((a) => `<span class="${a === myAvatar ? 'on' : ''}" onclick="pickAv('${a}')">${a}</span>`).join('')}</div>
+  <div class="card"><h3>选个头像</h3><div class="avpick">${AVATARS.map((a) => `<span class="${a === myAvatar ? 'on' : ''}" onclick="pickAv('${a}')">${avH(a)}</span>`).join('')}</div>
   <input id="nm" placeholder="你的昵称" maxlength="12" value="${esc(localStorage.name || '')}">
   <input id="cd" placeholder="房间号（4位）" inputmode="numeric" maxlength="4" value="${esc(code)}">
   <button onclick="doJoin()">加入房间</button><div class="mute center">掉线或换了手机？填同一个房间号和原来的昵称就能回到原位，身份不变。</div>
@@ -145,9 +146,11 @@ function lobbyView() {
   const ck = (k, label) => `<label class="ck"><input type="checkbox" ${st[k] ? 'checked' : ''} ${host ? '' : 'disabled'} onchange="setS({${k}:this.checked})">${label}</label>`;
   return `<div class="card center"><div class="mute">把房间号告诉大家，或者分享链接</div><div class="code">${S.code}</div>
     <button class="sec" onclick="share()">复制邀请链接</button></div>
-  ${S.me ? `<div class="card"><h3>我的头像</h3><div class="avpick">${AVATARS.map((a) => `<span class="${a === P(S.me).avatar ? 'on' : ''}" onclick="pickAv('${a}')">${a}</span>`).join('')}</div></div>` : ''}
-  <div class="card"><h3>玩家 ${n}/10（5 人起）</h3><div class="players">${S.players.map((p) => `<div class="p ${p.online ? '' : 'off'}"><span class="av">${p.avatar}</span>${esc(p.name)}<span class="tags">${p.id === S.hostId ? '<span class="tag lead">房主</span>' : ''}${p.online ? '' : '<span class="tag">离线</span>'}${host && p.id !== S.me ? `<span class="tag" onclick="${isGod() ? `god('kick',{id:'${p.id}'})` : `send({t:'kick',id:'${p.id}'})`}">移出</span>` : ''}</span></div>`).join('')}</div></div>
+  ${S.me ? `<div class="card"><h3>我的头像</h3><div class="avpick">${AVATARS.map((a) => `<span class="${a === P(S.me).avatar ? 'on' : ''}" onclick="pickAv('${a}')">${avH(a)}</span>`).join('')}</div></div>` : ''}
+  <div class="card"><h3>玩家 ${n}/10（5 人起）</h3><div class="players">${S.players.map((p) => `<div class="p ${p.online ? '' : 'off'}"><span class="av">${avH(p.avatar)}</span>${esc(p.name)}<span class="tags">${p.id === S.hostId ? '<span class="tag lead">房主</span>' : ''}${p.online ? '' : '<span class="tag">离线</span>'}${host && p.id !== S.me ? `<span class="tag" onclick="${isGod() ? `god('kick',{id:'${p.id}'})` : `send({t:'kick',id:'${p.id}'})`}">移出</span>` : ''}</span></div>`).join('')}</div></div>
   <div class="card"><h3>角色配置</h3><div class="mute">${host ? '点立绘选择/取消角色，点 🔍 放大看。' : '房主正在挑选角色。'}梅林、刺客一定在场，其余位置自动补忠臣和爪牙。</div>
+    <div class="pgh">预设板子 <small>${host ? '点一下直接套用，下面还可以再微调' : ''}</small></div>${presetsView(host)}
+    <div class="pgh" style="margin-top:14px">自定义</div>
     ${pickGrid(host)}
     ${roleCountHint()}
     <label class="ck">⏱ 每人发言时长 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({speechSecs:+this.value})">${[30, 60, 90, 120, 180, 300].map((s) => `<option value="${s}" ${st.speechSecs === s ? 'selected' : ''}>${s >= 60 ? s / 60 + ' 分钟' : s + ' 秒'}</option>`).join('')}</select></label></div>
@@ -320,7 +323,7 @@ function speechPanel() {
   if (!['propose', 'vote'].includes(S.phase)) return '';
   if (!sp) return (iLead || host) ? `<button class="okb" onclick="send({t:'speechStart'})">⏱ 开始轮流发言（从队长下家开始，队长最后）</button>` : '';
   const cur = sp.order[sp.idx], mine = cur === S.me, nxt = sp.order[sp.idx + 1];
-  return `<div class="card" style="border-color:var(--ok)"><div class="speech"><span class="av" style="font-size:30px;width:46px;height:46px">${P(cur).avatar}</span>
+  return `<div class="card" style="border-color:var(--ok)"><div class="speech"><span class="av" style="font-size:30px;width:46px;height:46px">${avH(P(cur).avatar)}</span>
     <div style="flex:1"><div><b>${mine ? '轮到你发言！' : `${seat(cur)}号 ${esc(P(cur).name)} 发言中`}</b></div><div class="mute">${sp.idx + 1}/${sp.order.length}${nxt ? ` · 下一位 ${nm(nxt)}` : ' · 最后一位'}</div></div>
     <div class="timer" data-end="${sp.endsAt}">--</div></div><div class="bar"><i data-end="${sp.endsAt}" data-secs="${sp.secs}"></i></div>
     <div class="row">${mine || iLead || host ? `<button class="sm sec" onclick="send({t:'speechNext'})">${mine ? '我说完了 ⏭' : '下一位 ⏭'}</button>` : ''}${iLead || host ? `<button class="sm sec" onclick="send({t:'speechStop'})">结束发言轮</button>` : ''}</div></div>`;
@@ -436,7 +439,7 @@ function voteMatrix() {
   if (!votes.length) return '';
   const qres = {}; S.history.filter((x) => x.type === 'quest').forEach((x) => (qres[x.quest] = x));
   return `<div class="card"><h3>📊 票型表</h3><div class="mx"><table><tr><th>玩家</th>${votes.map((v) => `<th class="${v.ok ? 'ok' : 'no'}">${v.quest + 1}-${v.attempt}<br>${v.ok ? '通过' : '否决'}</th>`).join('')}</tr>
-  ${S.players.map((p) => `<tr><td class="m${marks().m[p.id] || ''}">${MK[marks().m[p.id]] ? MK[marks().m[p.id]].e : ''}${seat(p.id)} ${p.avatar}${esc(p.name)}</td>${votes.map((v) => `<td class="${v.team.includes(p.id) ? 'tm' : ''}">${v.leader === p.id ? '👑' : ''}<span class="${v.votes[p.id] ? 'y' : 'n'}">${v.votes[p.id] ? '✓' : '✗'}</span></td>`).join('')}</tr>`).join('')}
+  ${S.players.map((p) => `<tr><td class="m${marks().m[p.id] || ''}">${MK[marks().m[p.id]] ? MK[marks().m[p.id]].e : ''}${seat(p.id)} ${avH(p.avatar, 'mini')}${esc(p.name)}</td>${votes.map((v) => `<td class="${v.team.includes(p.id) ? 'tm' : ''}">${v.leader === p.id ? '👑' : ''}<span class="${v.votes[p.id] ? 'y' : 'n'}">${v.votes[p.id] ? '✓' : '✗'}</span></td>`).join('')}</tr>`).join('')}
   <tr><td class="mute">任务</td>${votes.map((v) => { const q = v.ok && qres[v.quest]; return `<td>${q ? (q.success ? '🔵' : '🔴') + q.fails + '败' + (q.magics ? q.magics + '✨' : '') : ''}</td>`; }).join('')}</tr></table></div>
   <div class="mute">绿色底色 = 在车上的队员 · 👑 = 队长 · ✓同意 ✗反对 · 列名「2-3」= 第2轮第3次组队</div></div>`;
 }
@@ -454,7 +457,7 @@ function marks() {
 function saveMarks(x) { localStorage[mkKey()] = JSON.stringify(x); render(); }
 function avMark(p, i) {
   const m = S.gameId && !WATCH ? marks().m[p.id] : null;
-  return `<span class="av ${m ? 'mk-' + m : ''} ${linkFrom === p.id ? 'linking' : ''}" ${S.gameId && !WATCH ? `data-av="${p.id}"` : ''}>${p.avatar}<span class="seat">${i + 1}</span>${m ? `<span class="mkb">${MK[m].e}</span>` : ''}</span>`;
+  return `<span class="av ${m ? 'mk-' + m : ''} ${linkFrom === p.id ? 'linking' : ''}" ${S.gameId && !WATCH ? `data-av="${p.id}"` : ''}>${avH(p.avatar)}<span class="seat">${i + 1}</span>${m ? `<span class="mkb">${MK[m].e}</span>` : ''}</span>`;
 }
 function relChips(id) {
   if (!S.gameId || WATCH) return '';
@@ -528,7 +531,7 @@ document.addEventListener('click', (e) => {
   if (swallowClick) { swallowClick = false; return; }
   const id = el.dataset.av;
   if (linkFrom) { if (linkFrom === id) { linkFrom = null; render(); } else askRel(linkFrom, id); return; }
-  cycleMark(id);
+  if (selMode()) tog(id); else cycleMark(id);
 }, true);
 document.addEventListener('contextmenu', (e) => { if (e.target.closest && e.target.closest('[data-av]')) e.preventDefault(); });
 
@@ -571,7 +574,7 @@ function tvView() {
   const joinUrl = location.origin + '/?r=' + S.code;
   const head = `<div class="tvtitle"><h1>阿瓦隆</h1><span class="code">${S.code}</span><span class="tvjoin">手机打开 <b>${esc(location.host)}</b> 输入房间号加入</span><span class="sp" style="margin-left:auto"><span class="dot ${online ? '' : 'off'}" style="display:inline-block"></span> <span onclick="toggleMute()" style="cursor:pointer;font-size:28px">${muted ? '🔇' : '🔔'}</span></span></div>`;
   if (S.phase === 'lobby') {
-    return head + `<div class="tvgrid"><div class="card"><h3>玩家 ${S.players.length}/10</h3><div class="players">${S.players.map((p) => `<div class="p ${p.online ? '' : 'off'}"><span class="av">${p.avatar}</span>${esc(p.name)}${p.id === S.hostId ? ' <span class="tag lead">房主</span>' : ''}</div>`).join('')}</div></div>
+    return head + `<div class="tvgrid"><div class="card"><h3>玩家 ${S.players.length}/10</h3><div class="players">${S.players.map((p) => `<div class="p ${p.online ? '' : 'off'}"><span class="av">${avH(p.avatar)}</span>${esc(p.name)}${p.id === S.hostId ? ' <span class="tag lead">房主</span>' : ''}</div>`).join('')}</div></div>
     <div><div class="card center"><div class="mute" style="font-size:22px">手机打开下面的网址加入</div><div class="code" style="font-size:90px">${S.code}</div><div style="font-size:22px">${esc(joinUrl)}</div></div>
     <div class="card"><h3>本局配置</h3><div style="font-size:20px;line-height:1.8">${lobbyRoleList()}</div></div></div></div>`;
   }
@@ -588,9 +591,9 @@ function tvView() {
   let left = `<div class="banner" style="${bstyle}">${banner}</div>` + questTrack();
   if (S.speech) {
     const sp = S.speech, cur = sp.order[sp.idx], nxt = sp.order[sp.idx + 1];
-    left += `<div class="card" style="border-color:var(--ok)"><div class="speech"><span class="av" style="font-size:56px;width:84px;height:84px">${P(cur).avatar}</span>
+    left += `<div class="card" style="border-color:var(--ok)"><div class="speech"><span class="av" style="font-size:56px;width:84px;height:84px">${avH(P(cur).avatar)}</span>
       <div style="flex:1"><div style="font-size:30px"><b>${seat(cur)}号 ${esc(P(cur).name)}</b> 发言中</div><div class="mute" style="font-size:18px">${sp.idx + 1}/${sp.order.length}${nxt ? ` · 下一位 ${nm(nxt)}` : ' · 最后一位'}</div></div>
-      <div class="timer" data-end="${sp.endsAt}">--</div></div><div class="bar" style="height:10px"><i data-end="${sp.endsAt}" data-secs="${sp.secs}"></i></div></div>`;
+      ${sp.ready ? '<div class="timer">准备中</div>' : hourglass(sp.endsAt, sp.secs, 70)}</div></div>`;
   }
   if (S.phase === 'end') left += `<div class="card"><h3>身份揭晓</h3><div class="gallery" style="grid-template-columns:repeat(5,1fr)">${S.allRoles.map((r) => `<div class="gi ${r.evil ? 'e' : 'g'} ${S.assassinTarget === r.id ? 'dead' : ''}"><img class="portrait" src="${img(r.art)}" alt="" onerror="this.onerror=null;this.src='${img(r.role)}'"><div class="cap" style="font-size:15px">${seat(r.id)}号 ${nm(r.id)}<br><b style="color:${r.evil ? '#ff8a85' : '#9cc3ff'}">${r.name}</b></div></div>`).join('')}</div></div>`;
   else left += `<div class="card">${plist(false)}</div>`;
@@ -691,11 +694,21 @@ setInterval(tick, 500);
 // 按住看身份
 const isRc = (e) => e.target.closest && e.target.closest('#rc');
 let revealAnim = false;
-const on = (e) => { if (isRc(e)) { e.preventDefault(); reveal = true; revealAnim = true; render(); revealAnim = false; } };
+// 修复：按下后页面重绘会把手指下的元素换掉，旧元素收到的 touchend 不会冒泡到 document，
+// 所以直接在按下的那个元素上监听松手；再加几道保险（离开页面 / 失焦 / 指针取消）
+const on = (e) => {
+  if (!isRc(e)) return;
+  e.preventDefault();
+  const t = e.target;
+  ['touchend', 'touchcancel'].forEach((k) => t.addEventListener(k, off, { once: true }));
+  reveal = true; revealAnim = true; render(); revealAnim = false;
+};
 const off = () => { if (reveal) { reveal = false; render(); } };
 document.addEventListener('touchstart', on, { passive: false }); document.addEventListener('mousedown', on);
 document.addEventListener('touchend', off); document.addEventListener('mouseup', off); document.addEventListener('touchcancel', off);
+window.addEventListener('blur', off); document.addEventListener('visibilitychange', off); window.addEventListener('pointercancel', off);
 document.addEventListener('contextmenu', (e) => isRc(e) && e.preventDefault());
 
-render(); connect();
+// table.js 在 app.js 之后加载并覆盖部分函数，等所有脚本执行完再首次渲染
+document.addEventListener('DOMContentLoaded', () => { render(); connect(); });
 document.addEventListener('click', (e) => { const sm = e.target.closest && e.target.closest('summary'); if (!sm) return; const d = sm.parentNode; requestAnimationFrame(() => { if (d.open) { d.classList.add('just'); setTimeout(() => d.classList.remove('just'), 400); } }); });

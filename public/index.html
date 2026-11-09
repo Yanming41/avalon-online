@@ -205,7 +205,7 @@ body.tv .tvgrid > div:last-child .card{font-size:18px!important}
 @keyframes popOut{to{opacity:0;transform:scale(.94) translateY(6px)}}
 @keyframes slideIn{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:none}}
 @keyframes slideUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
-@keyframes cardReveal{0%{transform:perspective(800px) rotateY(90deg);filter:brightness(2)}100%{transform:none;filter:none}}
+@keyframes cardReveal{0%{opacity:0;filter:brightness(2)}100%{opacity:1;filter:none}}
 @keyframes qpop{0%{transform:scale(.4)}60%{transform:scale(1.18)}100%{transform:scale(1)}}
 @keyframes glow{0%,100%{box-shadow:0 0 12px #e0b45a55}50%{box-shadow:0 0 22px #e0b45aaa}}
 @keyframes toastIn{from{opacity:0;transform:translate(-50%,20px)}to{opacity:1;transform:translate(-50%,0)}}
@@ -262,6 +262,7 @@ button:hover:not(:disabled){filter:brightness(1.08)}
 .flip .bk .bki{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 9px}
 </style>
 <link rel="stylesheet" href="rulebook.css">
+<link rel="stylesheet" href="table.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="rough" x="-3%" y="-3%" width="106%" height="106%"><feTurbulence type="fractalNoise" baseFrequency=".04" numOctaves="4" seed="7"/><feDisplacementMap in="SourceGraphic" scale="9"/></filter></svg>
@@ -271,5 +272,6 @@ button:hover:not(:disabled){filter:brightness(1.08)}
 <script src="roles.js"></script>
 <script src="rulebook.js"></script>
 <script src="app.js"></script>
+<script src="table.js"></script>
 </body>
 </html>

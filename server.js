@@ -24,7 +24,8 @@ const EVIL_ROLES = new Set(['assassin', 'morgana', 'mordred', 'oberon', 'minion'
 // 大厅里可勾选的单个角色（阵营）；lancelot / sorcerer 是成对的
 const OPT_GOOD = ['percival', 'cleric', 'troublemaker'];
 const OPT_EVIL = ['morgana', 'mordred', 'oberon', 'lunatic', 'brute', 'revealer', 'trickster'];
-const AVATARS = ['🦁', '🐺', '🦊', '🐻', '🐼', '🐯', '🦉', '🦅', '🐉', '🦄', '🐸', '🐙', '🦈', '🐢', '🦌', '🐗', '🐰', '🐱', '🐶', '🐧'];
+const AVATARS = ['lion', 'eagle', 'dragon', 'stag', 'wolf', 'bear', 'boar', 'griffin', 'unicorn', 'raven', 'owl', 'fox', 'horse', 'falcon', 'serpent', 'swan', 'tower', 'rose', 'sun', 'moon'];
+const OLD_AVATARS = ['🦁', '🐺', '🦊', '🐻', '🐼', '🐯', '🦉', '🦅', '🐉', '🦄', '🐸', '🐙', '🦈', '🐢', '🦌', '🐗', '🐰', '🐱', '🐶', '🐧'];
 const DEFAULT_SETTINGS = {
   percival: true, morgana: true, mordred: false, oberon: false, cleric: false, troublemaker: false,
   lunatic: false, brute: false, revealer: false, trickster: false, sorcerer: false,
@@ -188,7 +189,11 @@ function nextSpeaker(room, timeout) {
   if (timeout) g.bellSeq = (g.bellSeq || 0) + 1; // 发言超时，客户端据此响铃
   sp.idx++;
   if (sp.idx >= sp.order.length) { g.speech = null; return; }
-  sp.endsAt = Date.now() + sp.secs * 1000;
+  sp.endsAt = null; sp.ready = true; // 等这位发言人按「开始发言」再计时
+}
+function speechGo(room) {
+  const sp = room.game && room.game.speech; if (!sp || !sp.ready) return;
+  sp.ready = false; sp.endsAt = Date.now() + sp.secs * 1000;
   armSpeechTimer(room);
 }
 
@@ -250,7 +255,7 @@ function handle(room, pid, msg, ws) {
     }
     case 'profile': {
       const p = room.players.find((x) => x.id === pid);
-      if (AVATARS.includes(msg.avatar)) p.avatar = msg.avatar;
+      if (AVATARS.includes(msg.avatar) || OLD_AVATARS.includes(msg.avatar)) p.avatar = msg.avatar;
       break;
     }
     case 'kick':
@@ -273,6 +278,12 @@ function handle(room, pid, msg, ws) {
       const cur = g.speech.order[g.speech.idx];
       if (pid !== cur && pid !== leaderId && !isHost) return;
       nextSpeaker(room); break;
+    }
+    case 'speechGo': {
+      if (!g || !g.speech) return;
+      const cur = g.speech.order[g.speech.idx];
+      if (pid !== cur && pid !== leaderId && !isHost) return;
+      speechGo(room); break;
     }
     case 'speechStop':
       if (!g || (pid !== leaderId && !isHost)) return; clearSpeech(room); break;
@@ -450,7 +461,7 @@ function godAction(room, msg, ws) {
   else if (a === 'toAssassin') { clearSpeech(room); g.phase = 'assassin'; g.evilSuggest = {}; }
   else if (a === 'end') endGame(room, msg.winner === 'good' ? 'good' : 'evil', '上帝裁定结束');
   else if (a === 'speechSkip') nextSpeaker(room);
-  else if (a === 'speechAdd') { if (g.speech) { g.speech.endsAt += 30e3; armSpeechTimer(room); } }
+  else if (a === 'speechAdd') { if (g.speech && g.speech.endsAt) { g.speech.endsAt += 30e3; armSpeechTimer(room); } }
   else return;
   broadcast(room);
 }
@@ -466,7 +477,7 @@ wss.on('connection', (ws, req) => {
     if (msg.t === 'create' || msg.t === 'join') {
       const name = String(msg.name || '').trim().slice(0, 12);
       const token = String(msg.token || '').slice(0, 64);
-      const avatar = AVATARS.includes(msg.avatar) ? msg.avatar : AVATARS[crypto.randomInt(AVATARS.length)];
+      const avatar = (AVATARS.includes(msg.avatar) || OLD_AVATARS.includes(msg.avatar)) ? msg.avatar : AVATARS[crypto.randomInt(AVATARS.length)];
       if (!name || !token) return err(ws, '请输入昵称');
       if (msg.t === 'create') {
         room = { code: newCode(), players: [], roles: {}, game: null, gods: new Set(), watchers: new Set(), settings: { ...DEFAULT_SETTINGS }, touched: Date.now() };
