@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const records = require('./records');
+const state = require('./state');
 
 const PORT = process.env.PORT || 3000;
 const GOD_PASSWORD = process.env.GOD_PASSWORD || ''; // 为空则关闭上帝模式
@@ -33,7 +34,7 @@ const DEFAULT_SETTINGS = {
   leaderMode: 'seq', // seq 按座位顺序 / random 每轮随机
   clericTiming: 'start', // start 开局查首任队长 / propose 首次发车后查发车的队长
   lancelot: 0, // 0 关闭，1/2/3 对应三套兰斯洛特规则
-  lady: false, excalibur: false, speechSecs: 90,
+  lady: false, excalibur: false, speechSecs: 90, assassinSecs: 120,
 };
 
 const rooms = new Map();
@@ -151,7 +152,7 @@ function viewFor(room, pid, god) {
   if (g.phase === 'quest' && g.team.includes(pid)) { v.myCards = allowedCards(room, pid); if (g.questCards[pid] !== undefined) v.myCard = true; }
   if (g.phase === 'assassin' || g.phase === 'end') v.assassinRandom = !!g.assassinRandom;
   if (g.phase === 'assassin') {
-    v.assassin = g.assassinId;
+    v.assassin = g.assassinId; v.assassinEndsAt = g.assassinEndsAt || null; v.assassinSecs = g.assassinSecs || 0;
     // 刺杀环节：当前坏人阵营全部亮明身份，一起商量刺谁
     if ((role && evilNow(room, pid)) || god) {
       v.evilTeam = room.players.filter((p) => evilNow(room, p.id)).map((p) => p.id);
@@ -166,6 +167,7 @@ function viewFor(room, pid, god) {
 
 const THROW_ITEMS = ['egg', 'tomato', 'cabbage', 'shoe', 'rose', 'goblet'];
 function broadcast(room) {
+  state.schedule(rooms); // 对局续存：有变化就（防抖）存快照
   for (const p of room.players) if (p.ws && !p.ws._god && p.ws.readyState === 1) p.ws.send(JSON.stringify({ t: 'state', s: viewFor(room, p.id) }));
   // 观战 / 投屏：只拿公开信息（等同于一个没有身份的旁观者）
   if (room.watchers.size) { const pub = JSON.stringify({ t: 'state', s: { ...viewFor(room, null, false), watch: true } }); for (const w of room.watchers) if (w.readyState === 1) w.send(pub); }
@@ -219,8 +221,9 @@ function startGame(room) {
   const r = buildRoles(n, s);
   if (r.error) return r.error;
   room.roles = {};
-  room.players = shuffle(room.players); // 随机座位顺序 = 队长轮转顺序
-  room.players.forEach((p, i) => { room.roles[p.id] = r.roles[i]; });
+  // 座位顺序 = 准备阶段排好的现实座位（不再打乱）；身份随机发
+  const dealt = shuffle(r.roles);
+  room.players.forEach((p, i) => { room.roles[p.id] = dealt[i]; });
   clearTimeout(room.speechTimer);
   const leaderIdx = crypto.randomInt(n);
   const g = room.game = {
@@ -295,6 +298,12 @@ function handle(room, pid, msg, ws) {
       const p = room.players.find((x) => x.id === pid);
       if (AVATARS.includes(msg.avatar) || OLD_AVATARS.includes(msg.avatar)) p.avatar = msg.avatar;
       break;
+    }
+    case 'seat': { // 准备阶段按现实座位排：交换两个人的位置（谁都可以排）
+      if (g) return;
+      const i = room.players.findIndex((p) => p.id === msg.a), j = room.players.findIndex((p) => p.id === msg.b);
+      if (i < 0 || j < 0 || i === j) return;
+      [room.players[i], room.players[j]] = [room.players[j], room.players[i]]; break;
     }
     case 'kick':
       if (!isHost || g || msg.id === pid) return;
@@ -401,6 +410,7 @@ function applySettings(room, s) {
   if ('leaderMode' in s) room.settings.leaderMode = s.leaderMode === 'random' ? 'random' : 'seq';
   if ('clericTiming' in s) room.settings.clericTiming = s.clericTiming === 'propose' ? 'propose' : 'start';
   if ('lancelot' in s) room.settings.lancelot = [0, 1, 2, 3].includes(+s.lancelot) ? +s.lancelot : 0;
+  if ('assassinSecs' in s) room.settings.assassinSecs = Math.max(0, Math.min(900, parseInt(s.assassinSecs) || 0));
   if ('speechSecs' in s) room.settings.speechSecs = Math.max(15, Math.min(600, parseInt(s.speechSecs) || 90));
 }
 
@@ -446,6 +456,7 @@ function enterAssassin(room) {
   const evils = room.players.filter((p) => evilNow(room, p.id));
   g.assassinId = a ? a.id : evils.length ? evils[crypto.randomInt(evils.length)].id : null; // 没有刺客：随机一名坏人来刺
   g.assassinRandom = !a;
+  const as = room.settings.assassinSecs ?? 120; g.assassinSecs = as; g.assassinEndsAt = as ? Date.now() + as * 1000 : null;
   if (!g.assassinId) endGame(room, 'good', '场上没有坏人可以刺杀，好人获胜');
 }
 function doAssassinate(room, id, ws) {
@@ -528,7 +539,9 @@ const godFails = new Map(); // ip -> 连续输错次数
 wss.on('connection', (ws, req) => {
   ws._ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   let room = null, pid = null;
-  ws.on('message', (raw) => {
+  // 启动后不久第一次有人连进来时，先拉最新快照再处理消息（每条连接内保持顺序）
+  ws.on('message', (raw) => { ws._q = (ws._q || Promise.resolve()).then(() => (state.needRefresh() ? refreshRooms() : null)).then(() => onMsg(raw)).catch((e) => console.log('msg error', e)); });
+  const onMsg = (raw) => {
     let msg; try { msg = JSON.parse(raw); } catch { return; }
     if (msg.t === 'create' || msg.t === 'join') {
       const name = String(msg.name || '').trim().slice(0, 12);
@@ -603,7 +616,7 @@ wss.on('connection', (ws, req) => {
     }
     if (!room.players.some((p) => p.id === pid)) return err(ws, '你不在房间里');
     handle(room, pid, msg, ws);
-  });
+  };
   ws.on('close', () => {
     if (!room) return;
     room.gods.delete(ws); room.watchers.delete(ws);
@@ -614,9 +627,32 @@ wss.on('connection', (ws, req) => {
 });
 
 // 6 小时没人动的房间清掉
-setInterval(() => { const t = Date.now(); for (const [c, r] of rooms) if (t - r.touched > 6 * 3600e3) { clearTimeout(r.speechTimer); rooms.delete(c); } }, 600e3);
+setInterval(() => { const t = Date.now(); for (const [c, r] of rooms) if (t - r.touched > 6 * 3600e3) { clearTimeout(r.speechTimer); rooms.delete(c); state.schedule(rooms); } }, 600e3);
 // 心跳，防止云平台断开空闲连接
 setInterval(() => wss.clients.forEach((c) => { if (c._alive === false) return c.terminate(); c._alive = false; if (c.readyState === 1) c.ping(); }), 20e3);
 wss.on('connection', (c) => { c._alive = true; c.on('pong', () => { c._alive = true; }); });
 
-records.load().finally(() => server.listen(PORT, () => console.log(`Avalon on http://localhost:${PORT}  god=${GOD_PASSWORD ? 'on' : 'off'}  records=${records.enabled() ? 'github' : 'local'}`)));
+// ---------- 对局续存：启动时读回快照 ----------
+function restoreRoom(r) {
+  const room = { ...r, gods: new Set(), watchers: new Set(), players: r.players.map((p) => ({ ...p, ws: null })) };
+  if (room.game && room.game.speech && room.game.speech.endsAt) armSpeechTimer(room);
+  return room;
+}
+function applySnapshot(arr, onlyIdle) {
+  let n = 0;
+  for (const r of arr || []) {
+    const cur = rooms.get(r.code);
+    if (onlyIdle && cur && (cur.players.some((p) => p.ws) || cur.watchers.size || cur.gods.size)) continue; // 本进程里已经有人在用的房间以本进程为准
+    if (cur) clearTimeout(cur.speechTimer);
+    try { rooms.set(r.code, restoreRoom(r)); n++; } catch (e) { console.log('state: 恢复房间失败', r.code, e.message); }
+  }
+  return n;
+}
+let refreshP = null;
+function refreshRooms() {
+  return (refreshP ||= state.fetchSnapshot().then((arr) => { const n = applySnapshot(arr, true); state.markRefreshed(); if (n) console.log(`state: 补拉快照，更新 ${n} 个房间`); }).catch(() => state.markRefreshed()));
+}
+const loadState = () => state.fetchSnapshot().then((arr) => console.log(`state: 恢复 ${applySnapshot(arr, false)} 个房间${state.remote ? '（GitHub）' : ''}`)).catch(() => {});
+let stopping = false;
+process.on('SIGTERM', () => { if (stopping) return; stopping = true; console.log('state: 收到 SIGTERM，保存快照'); state.flush(rooms).finally(() => process.exit(0)); setTimeout(() => process.exit(0), 8000); });
+Promise.all([records.load(), loadState()]).finally(() => server.listen(PORT, () => console.log(`Avalon on http://localhost:${PORT}  god=${GOD_PASSWORD ? 'on' : 'off'}  records=${records.enabled() ? 'github' : 'local'}`)));

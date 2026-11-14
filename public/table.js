@@ -132,7 +132,7 @@ function seatStatus(p) {
 function roundTable(center) {
   const n = S.players.length, sp = S.speech, cur = sp && sp.order[sp.idx];
   const mode = selMode(), mine = marks();
-  const size = n >= 9 ? 52 : n >= 7 ? 58 : 64;
+  const size = Math.round((n >= 9 ? 52 : n >= 7 ? 58 : 64) * (WATCH ? 2 : 1));
   const seats = S.players.map((p, i) => {
     const a = -Math.PI / 2 + (2 * Math.PI * i) / n, x = 50 + 41 * Math.cos(a), y = 50 + 41 * Math.sin(a);
     const onTeam = (S.phase === 'propose' ? sel.has(p.id) && S.leader === S.me : S.team.includes(p.id) && !['lady', 'end'].includes(S.phase));
@@ -182,7 +182,7 @@ function centerStage() {
     const cur = sp.order[sp.idx];
     if (sp.ready) return `<div class="wait-go">${ic('mic')}</div><div class="cs-t">${cur === S.me ? '轮到你发言' : `${seat(cur)}号 ${esc(P(cur).name)}`}</div>
       ${cur === S.me ? `<button class="okb cs-go" onclick="send({t:'speechGo'})">${ic('mic')}开始发言</button>` : `<div class="cs-s">等待 TA 按「开始发言」</div>`}<div class="cs-s">${sp.dir === -1 ? '逆时针' : '顺时针'} · ${sp.idx + 1}/${sp.order.length}</div>`;
-    return `${hourglass(sp.endsAt, sp.secs, 38)}<div class="cs-t">${cur === S.me ? '轮到你发言' : `${seat(cur)}号 ${esc(P(cur).name)}`}</div><div class="cs-s">${sp.ready ? '准备中 · 按「开始发言」后计时' : `发言 ${sp.idx + 1}/${sp.order.length}`}</div>`;
+    return `${hourglass(sp.endsAt, sp.secs, WATCH ? 150 : 38)}<div class="cs-t">${cur === S.me ? '轮到你发言' : `${seat(cur)}号 ${esc(P(cur).name)}`}</div><div class="cs-s">${sp.ready ? '准备中 · 按「开始发言」后计时' : `发言 ${sp.idx + 1}/${sp.order.length}`}</div>`;
   }
   switch (S.phase) {
     case 'propose': return head(`第 ${S.quest + 1} 轮 · 组队`, `队长 ${seat(S.leader)}号 选 ${need} 人${S.rejects ? ` · 已否决 ${S.rejects} 次` : ''}`);
@@ -190,7 +190,7 @@ function centerStage() {
     case 'quest': return head('执行任务', `${S.questDone.length}/${S.team.length} 已出牌${S.quest === 3 && S.twoFailQuest4 ? ' · 需 2 张失败' : ''}`);
     case 'excalibur': return head('王者之剑', `${seat(S.excalibur)}号 决定是否翻牌`);
     case 'lady': return head('湖中仙女', `${seat(S.lady.holder)}号 正在查验`);
-    case 'assassin': return head('刺杀梅林', S.assassinRandom ? `没有刺客 · 随机抽中 ${seat(S.assassin)}号 拍板` : `刺客 ${seat(S.assassin)}号 拍板`);
+    case 'assassin': return (S.assassinEndsAt ? hourglass(S.assassinEndsAt, S.assassinSecs, WATCH ? 150 : 38) : '') + head('刺杀梅林', S.assassinRandom ? `没有刺客 · 随机抽中 ${seat(S.assassin)}号 拍板` : `刺客 ${seat(S.assassin)}号 拍板`);
     case 'end': return `<div class="cs-t ${S.winner}">${S.winner === 'good' ? '正义阵营获胜' : '邪恶阵营获胜'}</div><div class="cs-s">${esc(S.reason)}</div>`;
   }
   return '';

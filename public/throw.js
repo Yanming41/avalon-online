@@ -61,6 +61,7 @@ function pidRect(id) {
 function fxLayer() { let l = document.getElementById('throwfx'); if (!l) { l = document.createElement('div'); l.id = 'throwfx'; document.body.appendChild(l); } return l; }
 function onThrow(m) {
   const t = TH[m.item]; if (!t || !S) return;
+  if (fxLayer().childElementCount > 40) return; // 疯狂扔时限制同时在屏的特效数量，防卡
   const W = innerWidth, H = innerHeight;
   const dst = pidRect(m.to) || { x: W / 2, y: H / 2, w: 60 };
   let src = m.from && m.from !== m.to && pidRect(m.from);
@@ -82,7 +83,7 @@ function onThrow(m) {
 function impact(t, dst, m) {
   const s = document.createElement('div');
   s.className = 'th-stain'; s.style.left = dst.x + 'px'; s.style.top = dst.y + 'px';
-  s.style.setProperty('--w', Math.max(70, dst.w * 1.3) + 'px');
+  s.style.setProperty('--w', Math.min(150, Math.max(70, dst.w * 1.3)) + 'px');
   s.innerHTML = t.splat ? thImg(t.splat, t.se, 'th-sp') : `<span class="th-sp emo">${t.se}</span>`;
   fxLayer().appendChild(s);
   const seatEl = document.querySelector(`[data-pid="${m.to}"]`);

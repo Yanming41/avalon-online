@@ -48,6 +48,7 @@ const tx = (c, o) => c.w.send(JSON.stringify(o));
     else if (s.phase === 'quest') for (const id of s.team) tx(by(id), { t: 'quest', success: Math.random() < 0.5 });
     else if (s.phase === 'assassin') {
       const a = by(s.assassin); assert(a.s.evilTeam && a.s.evilTeam.length === 3, '刺杀环节坏人互相可见');
+      assert(s.assassinEndsAt > Date.now() + 100e3 && s.assassinSecs === 120, '刺杀计时默认 2 分钟');
       const t = a.s.players.find((p) => !a.s.evilTeam.includes(p.id)); tx(a, { t: 'assassinate', id: t.id });
     }
     await sleep(60);

@@ -78,6 +78,39 @@ function showRole(k) {
 // ---------- 渲染 ----------
 // 模板字符串里写 \d 会变成 d，所以投屏校验放在函数里
 function goTV() { const c = $('#wcd').value.trim(); if (!/^\d{4}$/.test(c)) return toast('房间号是 4 位数字'); location.href = '/?watch=' + c; }
+// ---------- 准备阶段的圆桌排座 ----------
+let seatPick = null, seatPressT = null, seatSwallow = false;
+function lobbyTable() {
+  const n = S.players.length; if (!n) return '';
+  const size = n >= 9 ? 50 : n >= 7 ? 56 : 62;
+  const seats = S.players.map((p, i) => {
+    const a = -Math.PI / 2 + (2 * Math.PI * i) / n, x = 50 + 41 * Math.cos(a), y = 50 + 41 * Math.sin(a);
+    return `<div data-pid="${p.id}" data-seat="${p.id}" class="seat ${p.online ? '' : 'off'} ${p.id === S.me ? 'me' : ''} ${seatPick === p.id ? 'picked swap' : ''} ${seatPick && seatPick !== p.id ? 'can' : ''}" style="left:${x}%;top:${y}%;--s:${size}px">
+      <div class="seat-av">${avH(p.avatar)}<span class="sn">${i + 1}</span></div><div class="seat-nm">${esc(p.name)}${p.id === S.me ? '<small>（我）</small>' : ''}</div></div>`;
+  }).join('');
+  const c = seatPick ? `<div class="cs-t">换到哪？</div><div class="cs-s">点另一个人交换 · 点自己取消</div>` : `<div class="cs-t">圆桌排座</div><div class="cs-s">长按头像，再点另一个人交换</div>`;
+  return `<div class="rtable lobbyt"><div class="rt-board"></div><div class="rt-cwrap"><div class="rt-center">${c}</div></div>${seats}</div>`;
+}
+function seatDown(e) {
+  if (typeof throwOpen !== 'undefined' && throwOpen) return;
+  const el = e.target.closest && e.target.closest('[data-seat]'); if (!el) return;
+  clearTimeout(seatPressT); seatSwallow = false;
+  seatPressT = setTimeout(() => { seatPressT = null; seatSwallow = true; vibrate(40); seatTap(el.dataset.seat); }, 450);
+}
+function seatTap(id) {
+  if (!seatPick) { seatPick = id; return render(); }
+  if (seatPick !== id) send({ t: 'seat', a: seatPick, b: id });
+  seatPick = null; render();
+}
+const seatCancel = () => { clearTimeout(seatPressT); seatPressT = null; };
+document.addEventListener('touchstart', seatDown, { passive: true }); document.addEventListener('mousedown', seatDown);
+['touchmove', 'touchend', 'mouseup'].forEach((ev) => document.addEventListener(ev, seatCancel, { passive: true }));
+document.addEventListener('click', (e) => {
+  const el = e.target.closest && e.target.closest('[data-seat]'); if (!el || (typeof throwOpen !== 'undefined' && throwOpen)) return;
+  if (seatSwallow) { seatSwallow = false; return; }
+  if (seatPick) seatTap(el.dataset.seat); // 已选中一人时，普通点击即可完成交换
+});
+document.addEventListener('contextmenu', (e) => { if (e.target.closest && e.target.closest('[data-seat]')) e.preventDefault(); });
 function render() {
   syncRulebook();
   if (typeof throwUI === 'function') setTimeout(throwUI);
@@ -163,12 +196,14 @@ function lobbyView() {
   return `<div class="card center"><div class="mute">把房间号告诉大家，或者分享链接</div><div class="code">${S.code}</div>
     <button class="sec" onclick="share()">复制邀请链接</button></div>
   ${S.me ? `<div class="card"><h3>我的头像</h3><div class="avpick">${AVATARS.map((a) => `<span class="${a === P(S.me).avatar ? 'on' : ''}" onclick="pickAv('${a}')">${avH(a)}</span>`).join('')}</div></div>` : ''}
-  <div class="card"><h3>玩家 ${n}/10（5 人起）</h3><div class="players">${S.players.map((p) => `<div data-pid="${p.id}" class="p ${p.online ? '' : 'off'}"><span class="av">${avH(p.avatar)}</span>${esc(p.name)}<span class="tags">${p.id === S.hostId ? '<span class="tag lead">房主</span>' : ''}${p.online ? '' : '<span class="tag">离线</span>'}${host && p.id !== S.me ? `<span class="tag" onclick="${isGod() ? `god('kick',{id:'${p.id}'})` : `send({t:'kick',id:'${p.id}'})`}">移出</span>` : ''}</span></div>`).join('')}</div></div>
+  <div class="card"><h3>玩家 ${n}/10（5 人起）</h3><div class="mute">按现实里的座位排：<b>长按</b>一个人，再点另一个人，两人交换位置（顺时针 = 号码从小到大）。</div>${lobbyTable(host)}
+  <div class="players lobbyctl">${S.players.map((p, i) => `<div class="p ${p.online ? '' : 'off'}"><span class="av">${avH(p.avatar)}</span>${i + 1}·${esc(p.name)}<span class="tags">${p.id === S.hostId ? '<span class="tag lead">房主</span>' : ''}${p.online ? '' : '<span class="tag">离线</span>'}${host && p.id !== S.me ? `<span class="tag" onclick="${isGod() ? `god('kick',{id:'${p.id}'})` : `send({t:'kick',id:'${p.id}'})`}">移出</span>` : ''}</span></div>`).join('')}</div></div>
   <div class="card"><h3>角色配置</h3><div class="mute">${host ? '点立绘选择/取消角色，点 🔍 放大看。' : '房主正在挑选角色。'}梅林一定在场；刺客可选，没选时由随机一名坏人刺杀。其余位置自动补忠臣和爪牙。</div>
     <div class="pgh">预设板子 <small>${host ? '点一下直接套用，下面还可以再微调' : ''}</small></div>${presetsView(host)}
     <div class="pgh" style="margin-top:14px">自定义</div>
     ${pickGrid(host)}
     ${roleCountHint()}
+    <label class="ck">🗡️ 刺杀时限 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({assassinSecs:+this.value})">${[0, 60, 120, 180, 300].map((s) => `<option value="${s}" ${(st.assassinSecs ?? 120) === s ? 'selected' : ''}>${s ? s / 60 + ' 分钟' : '不限时'}</option>`).join('')}</select></label>
     <label class="ck">⏱ 每人发言时长 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({speechSecs:+this.value})">${[30, 60, 90, 120, 180, 300].map((s) => `<option value="${s}" ${st.speechSecs === s ? 'selected' : ''}>${s >= 60 ? s / 60 + ' 分钟' : s + ' 秒'}</option>`).join('')}</select></label>
     <label class="ck">${ic('crown')} 队长轮换 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({leaderMode:this.value})"><option value="seq" ${st.leaderMode !== 'random' ? 'selected' : ''}>按座位顺序</option><option value="random" ${st.leaderMode === 'random' ? 'selected' : ''}>每轮随机</option></select></label>
     ${st.cleric ? `<label class="ck">${ic('eye')} 牧师查验 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({clericTiming:this.value})"><option value="start" ${st.clericTiming !== 'propose' ? 'selected' : ''}>开局查首任队长</option><option value="propose" ${st.clericTiming === 'propose' ? 'selected' : ''}>首次发车后查发车的队长</option></select></label>` : ''}</div>
@@ -609,17 +644,12 @@ function tvView() {
   else if (S.phase === 'assassin') banner = `🗡️ 刺杀环节：好人完成 3 次任务，刺客 ${nm(S.assassin)} 正在寻找梅林`;
   else if (S.phase === 'end') banner = `${S.winner === 'good' ? '🏆 正义阵营获胜' : '😈 邪恶阵营获胜'} · ${esc(S.reason)}`;
   const bstyle = S.phase === 'end' ? `background:${S.winner === 'good' ? 'var(--good)' : 'var(--evil)'};color:#fff` : S.phase === 'assassin' ? 'background:#5e1d1d;color:#fff' : '';
-  let left = `<div class="banner" style="${bstyle}">${banner}</div>` + questTrack();
-  if (S.speech) {
-    const sp = S.speech, cur = sp.order[sp.idx], nxt = sp.order[sp.idx + 1];
-    left += `<div class="card" style="border-color:var(--ok)"><div class="speech"><span class="av" style="font-size:56px;width:84px;height:84px">${avH(P(cur).avatar)}</span>
-      <div style="flex:1"><div style="font-size:30px"><b>${seat(cur)}号 ${esc(P(cur).name)}</b> 发言中</div><div class="mute" style="font-size:18px">${sp.idx + 1}/${sp.order.length}${nxt ? ` · 下一位 ${nm(nxt)}` : ' · 最后一位'}</div></div>
-      ${sp.ready ? '<div class="timer">准备中</div>' : hourglass(sp.endsAt, sp.secs, 70)}</div></div>`;
-  }
-  if (S.phase === 'end') left += `<div class="card"><h3>身份揭晓</h3><div class="gallery" style="grid-template-columns:repeat(5,1fr)">${S.allRoles.map((r) => `<div class="gi ${r.evil ? 'e' : 'g'} ${S.assassinTarget === r.id ? 'dead' : ''}"><img class="portrait" src="${img(r.art)}" alt="" onerror="this.onerror=null;this.src='${img(r.role)}'"><div class="cap" style="font-size:15px">${seat(r.id)}号 ${nm(r.id)}<br><b style="color:${r.evil ? '#ff8a85' : '#9cc3ff'}">${r.name}</b></div></div>`).join('')}</div></div>`;
-  else left += `<div class="card">${plist(false)}</div>`;
-  const right = infoCard() + voteMatrix();
-  return head + `<div class="tvgrid"><div>${left}</div><div>${right}</div></div>`;
+  // 大屏：左边是放大的圆桌（中间大沙漏/大字），右边是任务进度和票型
+  let left = `<div class="tvtable">${roundTable(centerStage())}</div>`;
+  let right = `<div class="banner" style="${bstyle}">${banner}</div>` + questTrack();
+  if (S.phase === 'end') right += `<div class="card"><h3>身份揭晓</h3><div class="gallery" style="grid-template-columns:repeat(5,1fr)">${S.allRoles.map((r) => `<div class="gi ${r.evil ? 'e' : 'g'} ${S.assassinTarget === r.id ? 'dead' : ''}"><img class="portrait" src="${img(r.art)}" alt="" onerror="this.onerror=null;this.src='${img(r.role)}'"><div class="cap" style="font-size:15px">${seat(r.id)}号 ${nm(r.id)}<br><b style="color:${r.evil ? '#ff8a85' : '#9cc3ff'}">${r.name}</b></div></div>`).join('')}</div></div>`;
+  const side2 = infoCard() + voteMatrix();
+  return head + `<div class="tvgrid tvgame"><div class="tvside">${right}</div>${left}<div class="tvside">${side2}</div></div>`;
 }
 function lobbyRoleList() {
   const st = S.settings, on = Object.keys(ROLES).filter((k) => st[k]);
@@ -711,6 +741,19 @@ function tick() {
   document.querySelectorAll('.bar i[data-end]').forEach((el) => { el.style.width = Math.max(0, Math.min(100, ((+el.dataset.end - now) / 1000 / +el.dataset.secs) * 100)) + '%'; });
 }
 setInterval(tick, 500);
+// 刺杀超时：疯狂提醒——刺客/坏人手机每 3 秒震动+警报，投屏全屏红闪+警报，直到刺下去
+let lastNag = 0;
+setInterval(() => {
+  const over = S && S.phase === 'assassin' && S.assassinEndsAt && Date.now() + clockSkew > S.assassinEndsAt;
+  document.body.classList.toggle('nag', !!over);
+  if (!over || Date.now() - lastNag < 3000) return;
+  lastNag = Date.now();
+  const amA = S.assassin === S.me, amEvil = S.evilTeam && S.evilTeam.includes(S.me);
+  if (amA || amEvil || WATCH) {
+    if (!muted && actx) [0, 0.18, 0.36].forEach((t) => tone(amA ? 1200 : 900, t, 0.12, 0.25));
+    if (amA) { vibrate([300, 100, 300, 100, 300]); toast('⏰ 超时了！快刺！'); } else if (amEvil) vibrate(200);
+  }
+}, 500);
 
 // 按住看身份
 const isRc = (e) => e.target.closest && e.target.closest('#rc');
