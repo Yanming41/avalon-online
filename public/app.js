@@ -41,6 +41,7 @@ function connect() {
       if (S.myRole) preload(S.myRole.art);
       render(); maybeEvent();
     }
+    if (m.t === 'throw' && typeof onThrow === 'function') onThrow(m);
     if (m.t === 'error') {
       toast(m.m);
       if (m.m.startsWith('房间不存在')) { delete localStorage.room; if (!S || !S.god) { S = null; render(); } }
@@ -75,8 +76,11 @@ function showRole(k) {
 }
 
 // ---------- 渲染 ----------
+// 模板字符串里写 \d 会变成 d，所以投屏校验放在函数里
+function goTV() { const c = $('#wcd').value.trim(); if (!/^\d{4}$/.test(c)) return toast('房间号是 4 位数字'); location.href = '/?watch=' + c; }
 function render() {
   syncRulebook();
+  if (typeof throwUI === 'function') setTimeout(throwUI);
   const app = $('#app');
   if (HISTORY) { app.innerHTML = historyView(); return animateView(app, 'history:' + !!HIST); }
   if (WATCH) { app.innerHTML = tvView(); return animateView(app, 'tv:' + (S ? S.phase : '')); }
@@ -109,7 +113,7 @@ function homeView() {
   <button class="sec" onclick="location.href='/?history'">📊 历史战绩 · 复盘</button>
   <div class="card"><details><summary>👀 观众席 / 投屏大屏</summary>
   <input id="wcd" placeholder="房间号" inputmode="numeric" maxlength="4" value="${esc(code)}"><input id="wnm" placeholder="你的名字（观众席用）" maxlength="12" value="${esc(localStorage.name || '')}">
-  <div class="row"><button onclick="goSpec()">进入观众席</button><button class="sec" onclick="const c=$('#wcd').value.trim();/^\d{4}$/.test(c)?location.href='/?watch='+c:toast('房间号是 4 位数字')">投屏大屏</button></div>
+  <div class="row"><button onclick="goSpec()">进入观众席</button><button class="sec" onclick="goTV()">投屏大屏</button></div>
   <div class="mute">观众席：在手机上看完整的圆桌和公开信息，名字会显示在观众席里，看不到任何人的身份。投屏大屏：横屏大字版，适合电视。都不占玩家位置。</div></details></div>
   <div class="card god"><details><summary>👁 上帝模式（裁判 / 调试）</summary>
   <input id="gcd" placeholder="房间号" inputmode="numeric" maxlength="4" value="${esc(code)}"><input id="gpw" type="password" placeholder="上帝密码">
@@ -159,7 +163,7 @@ function lobbyView() {
   return `<div class="card center"><div class="mute">把房间号告诉大家，或者分享链接</div><div class="code">${S.code}</div>
     <button class="sec" onclick="share()">复制邀请链接</button></div>
   ${S.me ? `<div class="card"><h3>我的头像</h3><div class="avpick">${AVATARS.map((a) => `<span class="${a === P(S.me).avatar ? 'on' : ''}" onclick="pickAv('${a}')">${avH(a)}</span>`).join('')}</div></div>` : ''}
-  <div class="card"><h3>玩家 ${n}/10（5 人起）</h3><div class="players">${S.players.map((p) => `<div class="p ${p.online ? '' : 'off'}"><span class="av">${avH(p.avatar)}</span>${esc(p.name)}<span class="tags">${p.id === S.hostId ? '<span class="tag lead">房主</span>' : ''}${p.online ? '' : '<span class="tag">离线</span>'}${host && p.id !== S.me ? `<span class="tag" onclick="${isGod() ? `god('kick',{id:'${p.id}'})` : `send({t:'kick',id:'${p.id}'})`}">移出</span>` : ''}</span></div>`).join('')}</div></div>
+  <div class="card"><h3>玩家 ${n}/10（5 人起）</h3><div class="players">${S.players.map((p) => `<div data-pid="${p.id}" class="p ${p.online ? '' : 'off'}"><span class="av">${avH(p.avatar)}</span>${esc(p.name)}<span class="tags">${p.id === S.hostId ? '<span class="tag lead">房主</span>' : ''}${p.online ? '' : '<span class="tag">离线</span>'}${host && p.id !== S.me ? `<span class="tag" onclick="${isGod() ? `god('kick',{id:'${p.id}'})` : `send({t:'kick',id:'${p.id}'})`}">移出</span>` : ''}</span></div>`).join('')}</div></div>
   <div class="card"><h3>角色配置</h3><div class="mute">${host ? '点立绘选择/取消角色，点 🔍 放大看。' : '房主正在挑选角色。'}梅林一定在场；刺客可选，没选时由随机一名坏人刺杀。其余位置自动补忠臣和爪牙。</div>
     <div class="pgh">预设板子 <small>${host ? '点一下直接套用，下面还可以再微调' : ''}</small></div>${presetsView(host)}
     <div class="pgh" style="margin-top:14px">自定义</div>
@@ -359,7 +363,7 @@ function plist(clickable) {
     if (S.excalibur === p.id) tags.push('<span class="tag lead">🔱圣剑</span>');
     if (S.revealed && S.revealed.includes(p.id) && !S.allRoles) tags.push('<span class="tag evil">📢已暴露·坏人</span>');
     if (!p.online) tags.push('<span class="tag">离线</span>');
-    return `<div class="p ${p.online ? '' : 'off'} ${sel.has(p.id) ? 'sel' : ''} ${cur === p.id ? 'speak' : ''}" ${clickable ? `onclick="tog('${p.id}')"` : ''}>
+    return `<div data-pid="${p.id}" class="p ${p.online ? '' : 'off'} ${sel.has(p.id) ? 'sel' : ''} ${cur === p.id ? 'speak' : ''}" ${clickable ? `onclick="tog('${p.id}')"` : ''}>
       ${avMark(p, i)}<span>${esc(p.name)}${p.id === S.me ? '<span class="mute">（我）</span>' : ''}<br>${relChips(p.id)}</span><span class="tags">${tags.join('')}</span></div>`;
   }).join('')}</div>`;
 }
@@ -526,6 +530,7 @@ function notesPanel() {
 }
 // 头像上的点击 / 长按（捕获阶段拦截，避免同时触发选队员）
 function avDown(e) {
+  if (typeof throwOpen !== 'undefined' && throwOpen) return;
   const el = e.target.closest && e.target.closest('[data-av]'); if (!el) return;
   const id = el.dataset.av; clearTimeout(pressT); swallowClick = false;
   pressT = setTimeout(() => {
@@ -540,6 +545,7 @@ document.addEventListener('touchmove', avCancel, { passive: true });
 document.addEventListener('touchend', avCancel);
 document.addEventListener('mouseup', avCancel);
 document.addEventListener('click', (e) => {
+  if (typeof throwOpen !== 'undefined' && throwOpen) return;
   const el = e.target.closest && e.target.closest('[data-av]'); if (!el) return;
   e.stopPropagation(); e.preventDefault();
   if (swallowClick) { swallowClick = false; return; }
@@ -589,7 +595,7 @@ function tvView() {
   const joinUrl = location.origin + '/?r=' + S.code;
   const head = `<div class="tvtitle"><h1>阿瓦隆</h1><span class="code">${S.code}</span><span class="tvjoin">手机打开 <b>${esc(location.host)}</b> 输入房间号加入</span><span class="sp" style="margin-left:auto"><span class="dot ${online ? '' : 'off'}" style="display:inline-block"></span> <span onclick="toggleMute()" style="cursor:pointer;font-size:28px">${muted ? '🔇' : '🔔'}</span></span></div>`;
   if (S.phase === 'lobby') {
-    return head + `<div class="tvgrid"><div class="card"><h3>玩家 ${S.players.length}/10</h3><div class="players">${S.players.map((p) => `<div class="p ${p.online ? '' : 'off'}"><span class="av">${avH(p.avatar)}</span>${esc(p.name)}${p.id === S.hostId ? ' <span class="tag lead">房主</span>' : ''}</div>`).join('')}</div></div>
+    return head + `<div class="tvgrid"><div class="card"><h3>玩家 ${S.players.length}/10</h3><div class="players">${S.players.map((p) => `<div data-pid="${p.id}" class="p ${p.online ? '' : 'off'}"><span class="av">${avH(p.avatar)}</span>${esc(p.name)}${p.id === S.hostId ? ' <span class="tag lead">房主</span>' : ''}</div>`).join('')}</div></div>
     <div><div class="card center"><div class="mute" style="font-size:22px">手机打开下面的网址加入</div><div class="code" style="font-size:90px">${S.code}</div><div style="font-size:22px">${esc(joinUrl)}</div></div>
     <div class="card"><h3>本局配置</h3><div style="font-size:20px;line-height:1.8">${lobbyRoleList()}</div></div></div></div>`;
   }

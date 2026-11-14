@@ -164,6 +164,7 @@ function viewFor(room, pid, god) {
   return v;
 }
 
+const THROW_ITEMS = ['egg', 'tomato', 'cabbage', 'shoe', 'rose', 'goblet'];
 function broadcast(room) {
   for (const p of room.players) if (p.ws && !p.ws._god && p.ws.readyState === 1) p.ws.send(JSON.stringify({ t: 'state', s: viewFor(room, p.id) }));
   // 观战 / 投屏：只拿公开信息（等同于一个没有身份的旁观者）
@@ -589,6 +590,17 @@ wss.on('connection', (ws, req) => {
     if (!room) return err(ws, '你不在房间里');
     room.touched = Date.now();
     if (msg.t === 'g') return ws._god ? godAction(room, msg, ws) : err(ws, '没有上帝权限');
+    if (msg.t === 'throw') { // 扔鸡蛋：玩家和有名字的观众都能扔，所有人都会看到动画
+      const isP = room.players.some((p) => p.id === pid);
+      if (!isP && !ws._wname) return;
+      const to = String(msg.to || ''), item = String(msg.item || '');
+      if (!THROW_ITEMS.includes(item) || !room.players.some((p) => p.id === to)) return;
+      const now = Date.now(); if (now - (ws._lastThrow || 0) < 1500) return; ws._lastThrow = now;
+      const out = JSON.stringify({ t: 'throw', from: isP ? pid : null, fromName: isP ? null : ws._wname, to, item, id: crypto.randomUUID() });
+      for (const p of room.players) if (p.ws && p.ws.readyState === 1) p.ws.send(out);
+      for (const w of [...room.watchers, ...room.gods]) if (w.readyState === 1) w.send(out);
+      return;
+    }
     if (!room.players.some((p) => p.id === pid)) return err(ws, '你不在房间里');
     handle(room, pid, msg, ws);
   });

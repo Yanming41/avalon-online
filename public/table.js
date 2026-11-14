@@ -144,7 +144,7 @@ function roundTable(center) {
     const face = role && S.phase === 'end'
       ? `<img class="crest portrait-face" src="${img(role.art)}" onerror="this.onerror=null;this.src='${img(role.role)}'" alt="">`
       : avH(p.avatar);
-    return `<div class="seat ${p.online ? '' : 'off'} ${onTeam ? 'team' : ''} ${picked ? 'picked' : ''} ${cur === p.id ? 'speak' : ''} ${p.id === S.me ? 'me' : ''} ${dis ? 'dis' : ''} ${mode && !dis ? 'can' : ''} ${role ? (role.evil ? 'evil' : 'good') : ''} ${S.assassinTarget === p.id ? 'stabbed' : ''}"
+    return `<div data-pid="${p.id}" class="seat ${p.online ? '' : 'off'} ${onTeam ? 'team' : ''} ${picked ? 'picked' : ''} ${cur === p.id ? 'speak' : ''} ${p.id === S.me ? 'me' : ''} ${dis ? 'dis' : ''} ${mode && !dis ? 'can' : ''} ${role ? (role.evil ? 'evil' : 'good') : ''} ${S.assassinTarget === p.id ? 'stabbed' : ''}"
       style="left:${x}%;top:${y}%;--s:${size}px">
       <div class="seat-av ${mk ? 'mk-' + mk : ''} ${linkFrom === p.id ? 'linking' : ''}" ${S.gameId && !WATCH ? `data-av="${p.id}"` : ''}>${face}
         <span class="sn">${i + 1}</span>${seatBadges(p)}${mk ? `<span class="mkb">${MK[mk].e}</span>` : ''}${sug ? `<span class="sug">${ic('target')}${sug}</span>` : ''}
