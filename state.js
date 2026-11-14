@@ -14,7 +14,7 @@ const remote = !!(TOKEN && REPO);
 const bootAt = Date.now();
 let sha = null, timer = null, writing = Promise.resolve(), lastJson = '', refreshed = false, branchOk = false;
 
-const gh = (p, opt = {}) => fetch(`https://api.github.com/repos/${REPO}/${p}`, {
+const gh = (p, opt = {}) => fetch(`https://api.github.com/repos/${REPO}${p ? "/" + p : ""}`, {
   ...opt,
   headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/vnd.github+json', 'User-Agent': 'avalon-online', ...(opt.headers || {}) },
 });
