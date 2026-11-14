@@ -12,7 +12,7 @@ const BRANCH = 'live-state', FILE_PATH = 'rooms.json';
 const LOCAL = path.join(__dirname, 'data', 'rooms.json');
 const remote = !!(TOKEN && REPO);
 const bootAt = Date.now();
-let sha = null, timer = null, writing = Promise.resolve(), lastJson = '', refreshed = false;
+let sha = null, timer = null, writing = Promise.resolve(), lastJson = '', refreshed = false, branchOk = false;
 
 const gh = (p, opt = {}) => fetch(`https://api.github.com/repos/${REPO}/${p}`, {
   ...opt,
@@ -49,13 +49,14 @@ async function fetchSnapshot() {
 async function write(json) {
   if (json === lastJson) return;
   if (!remote) { try { fs.mkdirSync(path.dirname(LOCAL), { recursive: true }); fs.writeFileSync(LOCAL, json); lastJson = json; } catch {} return; }
-  for (let attempt = 0; attempt < 2; attempt++) {
+  if (!branchOk) { try { branchOk = await ensureBranch(); } catch (e) { console.log('state: 建分支出错', e.message); } }
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const r = await gh(`contents/${FILE_PATH}`, { method: 'PUT', body: JSON.stringify({ message: 'state', branch: BRANCH, content: Buffer.from(json).toString('base64'), ...(sha ? { sha } : {}) }) });
       if (r.ok) { sha = (await r.json()).content.sha; lastJson = json; return; }
       if (r.status === 409 || r.status === 422) { await fetchSnapshot(); continue; } // sha 过期：拿到最新 sha 再写
       if (r.status === 404 && attempt === 0) { await ensureBranch(); continue; }
-      console.log('state: 写快照失败', r.status); return;
+      console.log('state: 写快照失败', r.status, (await r.text()).slice(0, 200)); return;
     } catch (e) { console.log('state: 写快照出错', e.message); return; }
   }
 }
