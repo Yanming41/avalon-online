@@ -203,6 +203,7 @@ function lobbyView() {
     <div class="pgh" style="margin-top:14px">自定义</div>
     ${pickGrid(host)}
     ${roleCountHint()}
+    ${teamSizeCtl(host)}
     <label class="ck">🗡️ 刺杀时限 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({assassinSecs:+this.value})">${[0, 60, 120, 180, 300].map((s) => `<option value="${s}" ${(st.assassinSecs ?? 120) === s ? 'selected' : ''}>${s ? s / 60 + ' 分钟' : '不限时'}</option>`).join('')}</select></label>
     <label class="ck">⏱ 每人发言时长 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({speechSecs:+this.value})">${[30, 60, 90, 120, 180, 300].map((s) => `<option value="${s}" ${st.speechSecs === s ? 'selected' : ''}>${s >= 60 ? s / 60 + ' 分钟' : s + ' 秒'}</option>`).join('')}</select></label>
     <label class="ck">${ic('crown')} 队长轮换 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({leaderMode:this.value})"><option value="seq" ${st.leaderMode !== 'random' ? 'selected' : ''}>按座位顺序</option><option value="random" ${st.leaderMode === 'random' ? 'selected' : ''}>每轮随机</option></select></label>
@@ -329,9 +330,17 @@ function closeModal() {
   m.classList.add('out'); setTimeout(() => { if (m.isConnected) m.remove(); }, 220);
 }
 
+// 每轮任务人数：默认按人数推荐，房主可改
+function teamSizeCtl(host) {
+  const n = S.players.length, d = S.defaultTeam; if (!d) return '';
+  const c = S.settings.teamSizes, cur = c ? c.map((x) => Math.min(x, n)) : d;
+  const sel = (i) => `<select style="width:auto" ${host ? '' : 'disabled'} onchange="setTeam(${i},+this.value)">${Array.from({ length: n }, (_, k) => k + 1).map((v) => `<option ${v === cur[i] ? 'selected' : ''}>${v}</option>`).join('')}</select>`;
+  return `<div class="ck">👥 每轮任务人数 ${[0, 1, 2, 3, 4].map(sel).join(' ')} ${c ? `<span class="tag" ${host ? 'onclick="setS({teamSizes:null})"' : ''}>自定义 · 恢复推荐</span>` : '<span class="mute">推荐</span>'}</div>`;
+}
+function setTeam(i, v) { const t = (S.settings.teamSizes || S.defaultTeam).slice(); t[i] = v; setS({ teamSizes: t }); }
 function roleCountHint() {
-  const st = S.settings, n = S.players.length, E = { 5: 2, 6: 2, 7: 3, 8: 3, 9: 3, 10: 4 }[n];
-  if (!E) return '';
+  const st = S.settings, n = S.players.length, E = S.evilTotal;
+  if (n < 5) return '';
   const e = ['assassin', 'morgana', 'mordred', 'oberon', 'lunatic', 'brute', 'revealer', 'trickster', 'evil_sorcerer'].filter((k) => st[k]).length + (st.lancelot ? 1 : 0);
   const g = 1 + ['percival', 'cleric', 'troublemaker', 'good_sorcerer'].filter((k) => st[k]).length + (st.lancelot ? 1 : 0);
   const bad = e > E || g > n - E;
@@ -666,7 +675,7 @@ function viewAsBar() {
     <select onchange="god('viewAs',{id:this.value||null});reveal=false;sel.clear()"><option value="">👁 上帝视角</option>${list.map((r) => `<option value="${r.id}" ${S.viewAs === r.id ? 'selected' : ''}>${seat(r.id)}号 ${esc(P(r.id).name)}${r.role ? ' · ' + r.role : ''}</option>`).join('')}</select>
     ${S.viewAs ? `<button class="sm sec" style="flex:none" onclick="stepView(1)">下一个 ▶</button>` : ''}</div>
     <div class="mute">${S.viewAs ? '你现在看到的就是这个玩家手机上的画面，点按钮等于替他操作。' : '选一个玩家，就能用他的视角看、替他操作，方便一个人测完整局。'}</div>
-    ${S.phase === 'lobby' || S.phase === 'end' ? `<div><button class="sm sec" onclick="god('addBots',{n:+prompt('补满到几人？(5-10)', '7')})">🤖 加机器人凑人数</button><button class="sm sec" onclick="god('removeBots')">移除机器人</button></div>` : ''}</div>`;
+    ${S.phase === 'lobby' || S.phase === 'end' ? `<div><button class="sm sec" onclick="god('addBots',{n:+prompt('补满到几人？', '7')})">🤖 加机器人凑人数</button><button class="sm sec" onclick="god('removeBots')">移除机器人</button></div>` : ''}</div>`;
 }
 function stepView(d) {
   const ids = S.players.map((p) => p.id), i = ids.indexOf(S.viewAs);

@@ -14,8 +14,13 @@ const PUB = path.join(__dirname, 'public');
 const TEAM_SIZES = {
   5: [2, 3, 2, 3, 3], 6: [2, 3, 4, 3, 4], 7: [2, 3, 3, 4, 4],
   8: [3, 4, 4, 5, 5], 9: [3, 4, 4, 5, 5], 10: [3, 4, 4, 5, 5],
+  11: [4, 5, 5, 6, 6], 12: [4, 5, 5, 6, 6], 13: [4, 5, 6, 6, 7],
 };
-const EVIL_COUNT = { 5: 2, 6: 2, 7: 3, 8: 3, 9: 3, 10: 4 };
+// 坏人数 ≈ 三分之一（5–10 人与官方一致）；14 人以上任务人数按 13 人比例放大
+const evilCount = (n) => Math.floor((n + 2) / 3);
+const defaultTeam = (n) => TEAM_SIZES[n] || (n > 13 ? TEAM_SIZES[13].map((x) => Math.round((x * n) / 13)) : null);
+// 本局任务人数：房主自定义优先（超过人数的会被截到人数）
+const teamFor = (room) => { const n = room.players.length, c = room.settings.teamSizes; return c && c.length === 5 ? c.map((x) => Math.min(x, n)) : defaultTeam(n); };
 const ROLE_NAME = {
   merlin: '梅林', percival: '派西维尔', servant: '亚瑟的忠臣', cleric: '牧师', troublemaker: '捣蛋鬼',
   good_sorcerer: '正义巫师', good_lancelot: '正义兰斯洛特',
@@ -82,7 +87,7 @@ function buildRoles(n, s) {
   const evil = OPT_EVIL.filter((k) => s[k]);
   const good = ['merlin', ...OPT_GOOD.filter((k) => s[k])];
   if (s.lancelot) { evil.push('evil_lancelot'); good.push('good_lancelot'); }
-  const E = EVIL_COUNT[n], G = n - E;
+  const E = evilCount(n), G = n - E;
   if (evil.length > E) return { error: `${n} 人局只有 ${E} 个坏人，现在选了 ${evil.length} 个坏人角色` };
   if (good.length > G) return { error: `${n} 人局只有 ${G} 个好人，现在选了 ${good.length} 个好人角色` };
   while (evil.length < E) evil.push('minion');
@@ -121,7 +126,7 @@ function allowedCards(room, pid) {
 function viewFor(room, pid, god) {
   const g = room.game;
   const v = {
-    code: room.code, hostId: room.hostId, me: pid, god: !!god, now: Date.now(), settings: room.settings,
+    code: room.code, hostId: room.hostId, me: pid, god: !!god, now: Date.now(), settings: room.settings, defaultTeam: defaultTeam(room.players.length), evilTotal: evilCount(room.players.length),
     players: room.players.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, online: !!p.ws })),
     phase: g ? g.phase : 'lobby', godEnabled: !!GOD_PASSWORD,
     spectators: [...room.watchers].filter((w) => w._wname && w.readyState === 1).map((w) => w._wname),
@@ -130,7 +135,7 @@ function viewFor(room, pid, god) {
   if (!g) return v;
   const n = room.players.length;
   Object.assign(v, {
-    teamSizes: TEAM_SIZES[n], twoFailQuest4: n >= 7, evilTotal: EVIL_COUNT[n],
+    teamSizes: g.teamSizes || teamFor(room), twoFailQuest4: n >= 7, evilTotal: evilCount(n),
     leader: room.players[g.leaderIdx].id, quest: g.quest, results: g.results,
     gameId: g.id, bellSeq: g.bellSeq || 0, rejects: g.rejects, team: g.team, history: g.history, speech: g.speech, lastEvent: g.lastEvent,
     voted: Object.keys(g.votes), questDone: Object.keys(g.questCards),
@@ -216,7 +221,7 @@ function speechGo(room) {
 // ---------- 游戏流程 ----------
 function startGame(room) {
   const n = room.players.length;
-  if (!TEAM_SIZES[n]) return `需要 5–10 人，现在 ${n} 人`;
+  if (n < 5) return `至少 5 人，现在 ${n} 人`;
   const s = room.settings;
   const r = buildRoles(n, s);
   if (r.error) return r.error;
@@ -226,7 +231,7 @@ function startGame(room) {
   room.players.forEach((p, i) => { room.roles[p.id] = dealt[i]; });
   clearTimeout(room.speechTimer);
   const leaderIdx = crypto.randomInt(n);
-  const g = room.game = {
+  const g = room.game = { teamSizes: teamFor(room),
     id: crypto.randomUUID().slice(0, 8), phase: 'propose', leaderIdx, quest: 0, results: [], rejects: 0, team: [], votes: {}, questCards: {},
     history: [], speech: null, evilSuggest: {}, seq: 0, revealed: [], trickShowEvil: {},
     excalibur: null, excalSeen: {}, ladyResults: {}, ladyLog: [], ladyUsed: [], ladyHolder: null,
@@ -257,7 +262,7 @@ function endGame(room, winner, reason) {
   g.record = {
     id: g.id, code: room.code, endedAt: Date.now(), winner, reason,
     players: room.players.map((p, i) => ({ seat: i + 1, name: p.name, avatar: p.avatar, role: room.roles[p.id], roleName: ROLE_NAME[room.roles[p.id]], art: g.art[p.id] || room.roles[p.id], evil: evilNow(room, p.id) })),
-    results: g.results, teamSizes: TEAM_SIZES[room.players.length],
+    results: g.results, teamSizes: g.teamSizes || teamFor(room),
     assassin: g.assassinId ? seatOf(g.assassinId) : null, assassinTarget: g.assassinTarget ? seatOf(g.assassinTarget) : null,
     settings: { ...room.settings },
     history: g.history.map((h) => {
@@ -336,7 +341,7 @@ function handle(room, pid, msg, ws) {
       if (!g || (pid !== leaderId && !isHost)) return; clearSpeech(room); break;
     case 'propose': {
       if (!g || g.phase !== 'propose' || leaderId !== pid) return;
-      const size = TEAM_SIZES[room.players.length][g.quest];
+      const size = (g.teamSizes || teamFor(room))[g.quest];
       const team = [...new Set(msg.team)].filter((id) => room.players.some((p) => p.id === id));
       if (team.length !== size) return err(ws, `本轮需要选 ${size} 人`);
       if (room.settings.excalibur) {
@@ -411,6 +416,7 @@ function applySettings(room, s) {
   if ('clericTiming' in s) room.settings.clericTiming = s.clericTiming === 'propose' ? 'propose' : 'start';
   if ('lancelot' in s) room.settings.lancelot = [0, 1, 2, 3].includes(+s.lancelot) ? +s.lancelot : 0;
   if ('assassinSecs' in s) room.settings.assassinSecs = Math.max(0, Math.min(900, parseInt(s.assassinSecs) || 0));
+  if ('teamSizes' in s) room.settings.teamSizes = Array.isArray(s.teamSizes) && s.teamSizes.length === 5 ? s.teamSizes.map((x) => Math.max(1, Math.min(30, parseInt(x) || 1))) : null;
   if ('speechSecs' in s) room.settings.speechSecs = Math.max(15, Math.min(600, parseInt(s.speechSecs) || 90));
 }
 
@@ -479,7 +485,7 @@ function godAction(room, msg, ws) {
   } else if (a === 'host' && p) room.hostId = p.id;
   else if (a === 'addBots') {
     if (g && g.phase !== 'end') return err(ws, '游戏进行中不能加人');
-    const want = Math.max(1, Math.min(10, parseInt(msg.n) || 5));
+    const want = Math.max(1, Math.min(20, parseInt(msg.n) || 5));
     let k = 1;
     while (room.players.length < want) {
       while (room.players.some((x) => x.name === '机器人' + k)) k++;
@@ -564,7 +570,6 @@ wss.on('connection', (ws, req) => {
           same.token = token; p = same;
         } else {
           if (room.game) return err(ws, '游戏已开始，不能中途加入。如果你是掉线的玩家，请填写原来的昵称');
-          if (room.players.length >= 10) return err(ws, '房间已满（最多 10 人）');
           p = { id: crypto.randomUUID().slice(0, 8), token, name, avatar };
           room.players.push(p);
         }
