@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const records = require('./records');
 const state = require('./state');
+const accounts = require('./accounts');
 
 const PORT = process.env.PORT || 3000;
 const GOD_PASSWORD = process.env.GOD_PASSWORD || ''; // 为空则关闭上帝模式
@@ -43,11 +44,17 @@ const DEFAULT_SETTINGS = {
 };
 
 const rooms = new Map();
+const validAvatar = (a) => AVATARS.includes(a) || OLD_AVATARS.includes(a) || accounts.isAvatarUrl(a);
+const profileAvatar = (pr) => (accounts.isAvatarUrl(pr.avatar_url) ? pr.avatar_url : AVATARS.includes(pr.crest) ? pr.crest : null);
 
 // ---------- 静态文件 ----------
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.json': 'application/json' };
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
+  if (p === '/api/config') { // 浏览器登录用的公开配置（只有公开 key，没有 service key）
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });
+    return res.end(JSON.stringify(accounts.publicConfig()));
+  }
   if (p.startsWith('/api/games')) {
     const id = p.split('/')[3];
     const body = id ? records.get(id) : { games: records.list(), persistent: records.enabled() };
@@ -127,7 +134,7 @@ function viewFor(room, pid, god) {
   const g = room.game;
   const v = {
     code: room.code, hostId: room.hostId, me: pid, god: !!god, now: Date.now(), settings: room.settings, defaultTeam: defaultTeam(room.players.length), evilTotal: evilCount(room.players.length),
-    players: room.players.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, online: !!p.ws })),
+    players: room.players.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, online: !!p.ws, ...(p.username ? { username: p.username } : {}) })),
     phase: g ? g.phase : 'lobby', godEnabled: !!GOD_PASSWORD,
     spectators: [...room.watchers].filter((w) => w._wname && w.readyState === 1).map((w) => w._wname),
   };
@@ -261,7 +268,7 @@ function endGame(room, winner, reason) {
   const mapVotes = (v) => Object.fromEntries(Object.entries(v).map(([k, x]) => [seatOf(k), x]));
   g.record = {
     id: g.id, code: room.code, endedAt: Date.now(), winner, reason,
-    players: room.players.map((p, i) => ({ seat: i + 1, name: p.name, avatar: p.avatar, role: room.roles[p.id], roleName: ROLE_NAME[room.roles[p.id]], art: g.art[p.id] || room.roles[p.id], evil: evilNow(room, p.id) })),
+    players: room.players.map((p, i) => ({ seat: i + 1, name: p.name, avatar: p.avatar, ...(p.username ? { username: p.username } : {}), role: room.roles[p.id], roleName: ROLE_NAME[room.roles[p.id]], art: g.art[p.id] || room.roles[p.id], evil: evilNow(room, p.id) })),
     results: g.results, teamSizes: g.teamSizes || teamFor(room),
     assassin: g.assassinId ? seatOf(g.assassinId) : null, assassinTarget: g.assassinTarget ? seatOf(g.assassinTarget) : null,
     settings: { ...room.settings },
@@ -273,6 +280,7 @@ function endGame(room, winner, reason) {
     }),
   };
   records.save(g.record);
+  accounts.saveGame(g.record, room.players.map((p) => p.userId || null)); // 登录玩家的战绩存进 Supabase
 }
 function event(room, e) { room.game.lastEvent = { ...e, seq: ++room.game.seq }; } // 客户端据此弹出票型/任务结果
 
@@ -301,7 +309,7 @@ function handle(room, pid, msg, ws) {
     }
     case 'profile': {
       const p = room.players.find((x) => x.id === pid);
-      if (AVATARS.includes(msg.avatar) || OLD_AVATARS.includes(msg.avatar)) p.avatar = msg.avatar;
+      if (validAvatar(msg.avatar)) p.avatar = msg.avatar;
       break;
     }
     case 'seat': { // 准备阶段按现实座位排：交换两个人的位置（谁都可以排）
@@ -547,12 +555,19 @@ wss.on('connection', (ws, req) => {
   let room = null, pid = null;
   // 启动后不久第一次有人连进来时，先拉最新快照再处理消息（每条连接内保持顺序）
   ws.on('message', (raw) => { ws._q = (ws._q || Promise.resolve()).then(() => (state.needRefresh() ? refreshRooms() : null)).then(() => onMsg(raw)).catch((e) => console.log('msg error', e)); });
-  const onMsg = (raw) => {
+  const onMsg = async (raw) => {
     let msg; try { msg = JSON.parse(raw); } catch { return; }
     if (msg.t === 'create' || msg.t === 'join') {
-      const name = String(msg.name || '').trim().slice(0, 12);
+      let name = String(msg.name || '').trim().slice(0, 12);
       const token = String(msg.token || '').slice(0, 64);
-      const avatar = (AVATARS.includes(msg.avatar) || OLD_AVATARS.includes(msg.avatar)) ? msg.avatar : AVATARS[crypto.randomInt(AVATARS.length)];
+      let avatar = validAvatar(msg.avatar) ? msg.avatar : AVATARS[crypto.randomInt(AVATARS.length)];
+      // 登录了账号：昵称、头像以服务器从 Supabase 读到的资料为准（客户端改不了别人的用户名）
+      let acct = null;
+      if (msg.auth && accounts.enabled()) {
+        acct = await accounts.lookup(msg.auth);
+        if (!acct) return err(ws, '登录已过期，请重新登录（或者先退出登录，以游客身份加入）');
+        name = acct.display_name.slice(0, 12); avatar = profileAvatar(acct) || avatar;
+      }
       if (!name || !token) return err(ws, '请输入昵称');
       if (msg.t === 'create') {
         room = { code: newCode(), players: [], roles: {}, game: null, gods: new Set(), watchers: new Set(), settings: { ...DEFAULT_SETTINGS }, touched: Date.now() };
@@ -561,10 +576,14 @@ wss.on('connection', (ws, req) => {
         room = rooms.get(String(msg.code || '').trim());
         if (!room) return err(ws, '房间不存在（服务器可能重启过，请重新建房）');
       }
-      let p = room.players.find((x) => x.token === token);
+      // 找回自己的位置：同一设备（token）> 同一账号（换手机也行）> 同昵称的游客座位
+      let p = room.players.find((x) => x.token === token) || (acct && room.players.find((x) => x.userId === acct.id));
+      if (p && p.userId && (!acct || p.userId !== acct.id)) p = null; // 账号的座位只有本人能回
       if (!p) {
         const same = room.players.find((x) => x.name === name);
         if (same) {
+          if (same.userId) return err(ws, `房间里已经有一位「${name}」${same.username ? '（@' + same.username + '）' : ''}，请换个昵称`);
+          if (acct && !room.game) return err(ws, `房间里已经有人叫「${name}」，去「我的资料」里换个昵称再进`);
           // 换手机/清了缓存：房间号 + 原来的昵称就能接回自己的位置；原玩家还在线时不允许（防冒名顶替）
           if (same.ws && same.ws.readyState === 1) return err(ws, `「${name}」正在线上。如果是你本人掉线了，请等几秒再试；否则请换个昵称`);
           same.token = token; p = same;
@@ -574,10 +593,25 @@ wss.on('connection', (ws, req) => {
           room.players.push(p);
         }
       }
+      p.token = token;
+      if (acct) Object.assign(p, { userId: acct.id, username: acct.username, ...(room.game ? {} : { name }), avatar }); // 对局中途不改名，免得别人认不出
       if (p.ws && p.ws !== ws) try { p.ws.send(JSON.stringify({ t: 'kicked', m: '你的账号在别的设备上登录了' })); p.ws.close(); } catch {}
       p.ws = ws; pid = p.id;
       if (!room.hostId || !room.players.some((x) => x.id === room.hostId)) room.hostId = p.id;
       ws.send(JSON.stringify({ t: 'joined', code: room.code }));
+      return broadcast(room);
+    }
+    if (msg.t === 'refreshProfile') { // 在房间里改了资料（昵称/头像）后，让服务器重新读一次
+      const me = room && room.players.find((x) => x.id === pid);
+      if (!me || !me.userId || !accounts.enabled()) return;
+      const acct = await accounts.lookup(msg.auth);
+      if (!acct || acct.id !== me.userId) return err(ws, '登录已过期，请重新登录');
+      const name = acct.display_name.slice(0, 12);
+      if (!room.game && name !== me.name) {
+        if (room.players.some((x) => x !== me && x.name === name)) err(ws, `房间里已经有人叫「${name}」，昵称暂时没换`);
+        else me.name = name;
+      }
+      me.username = acct.username; me.avatar = profileAvatar(acct) || me.avatar;
       return broadcast(room);
     }
     if (msg.t === 'watch') {

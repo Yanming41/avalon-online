@@ -20,7 +20,8 @@ function connect() {
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
   ws.onopen = () => {
     online = true;
-    if (localStorage.room && localStorage.name) send({ t: 'join', code: localStorage.room, name: localStorage.name, avatar: myAvatar, token });
+    // 等账号状态恢复好再自动回房间（登录玩家要带上登录凭证，否则会被当成游客）
+    if (localStorage.room && localStorage.name) whenAuthReady().then(() => send({ t: 'join', code: localStorage.room, name: localStorage.name, avatar: myAvatar, token, auth: authToken() }));
     if (localStorage.godRoom && sessionStorage.godPw) send({ t: 'god', code: localStorage.godRoom, password: sessionStorage.godPw });
     if (WATCH) send({ t: 'watch', code: WATCH });
     if (SPEC) send({ t: 'watch', code: SPEC.code, name: SPEC.name });
@@ -138,10 +139,11 @@ function render() {
 function homeView() {
   const code = new URLSearchParams(location.search).get('r') || localStorage.room || '';
   return `<h1>阿瓦隆</h1><div class="sub" style="font-family:var(--serif);letter-spacing:3px">卡美洛的忠臣与莫德雷德的爪牙</div>
-  <div class="card"><h3>选个头像</h3><div class="avpick">${AVATARS.map((a) => `<span class="${a === myAvatar ? 'on' : ''}" onclick="pickAv('${a}')">${avH(a)}</span>`).join('')}</div>
-  <input id="nm" placeholder="你的昵称" maxlength="12" value="${esc(localStorage.name || '')}">
+  ${accountHomeCard()}
+  <div class="card">${accIn() ? '<h3>进入房间</h3>' : `<h3>选个头像</h3><div class="avpick">${AVATARS.map((a) => `<span class="${a === myAvatar ? 'on' : ''}" onclick="pickAv('${a}')">${avH(a)}</span>`).join('')}</div>
+  <input id="nm" placeholder="你的昵称" maxlength="12" value="${esc(localStorage.name || '')}">`}
   <input id="cd" placeholder="房间号（4位）" inputmode="numeric" maxlength="4" value="${esc(code)}">
-  <button onclick="doJoin()">加入房间</button><div class="mute center">掉线或换了手机？填同一个房间号和原来的昵称就能回到原位，身份不变。</div>
+  <button onclick="doJoin()">加入房间</button><div class="mute center">${accIn() ? '掉线或换了手机？登录同一个账号、填同一个房间号，就能回到原位，身份不变。' : '掉线或换了手机？填同一个房间号和原来的昵称就能回到原位，身份不变。'}</div>
   <button class="sec" onclick="doCreate()">创建新房间</button></div>
   <button class="sec" onclick="location.href='/?history'">📊 历史战绩 · 复盘</button>
   <div class="card"><details><summary>👀 观众席 / 投屏大屏</summary>
@@ -173,12 +175,15 @@ function goSpec() {
   location.href = `/?spec=${c}&name=${encodeURIComponent(n)}`;
 }
 function pickAv(a) { myAvatar = a; localStorage.avatar = a; if (S) send({ t: 'profile', avatar: a }); render(); }
-function getName() { const n = $('#nm').value.trim(); if (!n) { toast('先输入昵称'); return null; } localStorage.name = n; return n; }
-function doCreate() { const n = getName(); if (n) send({ t: 'create', name: n, avatar: myAvatar, token }); }
+function getName() {
+  if (accIn()) return (localStorage.name = ACC.profile.display_name);
+  const n = $('#nm').value.trim(); if (!n) { toast('先输入昵称'); return null; } localStorage.name = n; return n;
+}
+function doCreate() { const n = getName(); if (n) send({ t: 'create', name: n, avatar: myAvatar, token, auth: authToken() }); }
 function doJoin() {
   const n = getName(); const c = $('#cd').value.trim(); if (!n) return;
   if (!/^\d{4}$/.test(c)) return toast('房间号是 4 位数字');
-  send({ t: 'join', code: c, name: n, avatar: myAvatar, token });
+  send({ t: 'join', code: c, name: n, avatar: myAvatar, token, auth: authToken() });
 }
 function doGod() {
   const c = $('#gcd').value.trim(), pw = $('#gpw').value;
@@ -195,9 +200,9 @@ function lobbyView() {
   const ck = (k, label) => `<label class="ck"><input type="checkbox" ${st[k] ? 'checked' : ''} ${host ? '' : 'disabled'} onchange="setS({${k}:this.checked})">${label}</label>`;
   return `<div class="card center"><div class="mute">把房间号告诉大家，或者分享链接</div><div class="code">${S.code}</div>
     <button class="sec" onclick="share()">复制邀请链接</button></div>
-  ${S.me ? `<div class="card"><h3>我的头像</h3><div class="avpick">${AVATARS.map((a) => `<span class="${a === P(S.me).avatar ? 'on' : ''}" onclick="pickAv('${a}')">${avH(a)}</span>`).join('')}</div></div>` : ''}
+  ${S.me && accIn() && P(S.me).username ? accountLobbyCard() : S.me ? `<div class="card"><h3>我的头像</h3><div class="avpick">${AVATARS.map((a) => `<span class="${a === P(S.me).avatar ? 'on' : ''}" onclick="pickAv('${a}')">${avH(a)}</span>`).join('')}</div></div>` : ''}
   <div class="card"><h3>玩家 ${n}/10（5 人起）</h3><div class="mute">按现实里的座位排：<b>长按</b>一个人，再点另一个人，两人交换位置（顺时针 = 号码从小到大）。</div>${lobbyTable(host)}
-  <div class="players lobbyctl">${S.players.map((p, i) => `<div class="p ${p.online ? '' : 'off'}"><span class="av">${avH(p.avatar)}</span>${i + 1}·${esc(p.name)}<span class="tags">${p.id === S.hostId ? '<span class="tag lead">房主</span>' : ''}${p.online ? '' : '<span class="tag">离线</span>'}${host && p.id !== S.me ? `<span class="tag" onclick="${isGod() ? `god('kick',{id:'${p.id}'})` : `send({t:'kick',id:'${p.id}'})`}">移出</span>` : ''}</span></div>`).join('')}</div></div>
+  <div class="players lobbyctl">${S.players.map((p, i) => `<div class="p ${p.online ? '' : 'off'}"><span class="av">${avH(p.avatar)}</span>${i + 1}·${esc(p.name)}${p.username ? `<small class="uname">@${esc(p.username)}</small>` : ''}<span class="tags">${p.id === S.hostId ? '<span class="tag lead">房主</span>' : ''}${p.online ? '' : '<span class="tag">离线</span>'}${host && p.id !== S.me ? `<span class="tag" onclick="${isGod() ? `god('kick',{id:'${p.id}'})` : `send({t:'kick',id:'${p.id}'})`}">移出</span>` : ''}</span></div>`).join('')}</div></div>
   <div class="card"><h3>角色配置</h3><div class="mute">${host ? '点立绘选择/取消角色，点 🔍 放大看。' : '房主正在挑选角色。'}梅林一定在场；刺客可选，没选时由随机一名坏人刺杀。其余位置自动补忠臣和爪牙。</div>
     <div class="pgh">预设板子 <small>${host ? '点一下直接套用，下面还可以再微调' : ''}</small></div>${presetsView(host)}
     <div class="pgh" style="margin-top:14px">自定义</div>
