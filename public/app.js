@@ -1,4 +1,4 @@
-const BRAND = '<h1 class="brand"><img class="mark" src="/img/brand/deerlon-mark.svg" alt="" width="200" height="200"><img class="word" src="/img/brand/deerlon-wordmark.webp" alt="Deerlon 阿瓦鹿" width="1200" height="478"></h1>';
+const BRAND = '<h1 class="brand"><img class="mark" src="/img/brand/deerlon-mark.svg" alt="" width="200" height="200"><img class="word" src="/img/brand/deerlon-wordmark.webp" alt="Deerlon 阿瓦鹿" width="1200" height="456"></h1>';
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
