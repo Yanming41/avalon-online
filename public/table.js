@@ -77,6 +77,7 @@ requestAnimationFrame(tickHourglass);
 
 // ---------- 头像：纹章图片（兼容旧的 emoji 头像） ----------
 function avH(a, cls = '') {
+  if (a && /^https?:\/\/[^\s"'<>()\\]+$/.test(a)) return `<img class="crest up ${cls}" src="${esc(a)}" alt="" draggable="false" loading="lazy" onerror="this.outerHTML='<span class=&quot;crest-emo ${cls}&quot;>⚜</span>'">`; // 上传的头像
   if (a && /^[a-z]+$/.test(a)) return `<img class="crest ${cls}" src="img/crests/${a}.webp" alt="" draggable="false" onerror="this.outerHTML='<span class=&quot;crest-emo ${cls}&quot;>${CREST_EMO[a] || '⚜'}</span>'">`;
   return `<span class="crest-emo ${cls}">${a || '❔'}</span>`;
 }

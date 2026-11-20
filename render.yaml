@@ -14,3 +14,11 @@ services:
         value: Yanming41/avalon-records
       - key: RECORDS_GITHUB_TOKEN
         sync: false             # GitHub 令牌只在 Render 后台填，不进仓库
+      - key: SUPABASE_URL          # 账号系统（可选）：https://xxxx.supabase.co
+        sync: false
+      - key: SUPABASE_ANON_KEY     # 公开 key（publishable / anon）
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY # 服务端 key（secret / service_role），只填在 Render 后台
+        sync: false
+      - key: AUTH_PROVIDERS        # 可选：google,discord（要先在 Supabase 后台开启对应登录方式）
+        sync: false
