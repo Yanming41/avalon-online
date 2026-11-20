@@ -24,7 +24,8 @@ const mock = http.createServer((req, res) => {
       const id = tokens[(req.headers.authorization || '').replace('Bearer ', '')];
       return id ? json(200, { id }) : json(401, { msg: 'invalid JWT' });
     }
-    if (req.headers.authorization !== 'Bearer service-key') return json(401, { msg: 'need service key' });
+    if (req.headers.apikey !== 'sb_secret_test') return json(401, { msg: 'need service key' });
+    if (req.headers.authorization) return json(401, { msg: 'sb_ keys must not be sent as Bearer' });
     if (u.pathname === '/rest/v1/profiles') { const id = (u.searchParams.get('id') || '').replace('eq.', ''); return json(200, profiles[id] ? [profiles[id]] : []); }
     if (u.pathname === '/rest/v1/games' || u.pathname === '/rest/v1/game_players') { posted[u.pathname.split('/').pop()].push(JSON.parse(body)); return json(201, {}); }
     json(404, {});
@@ -44,13 +45,13 @@ const lastErr = (c) => [...c.msgs].reverse().find((m) => m.t === 'error');
 (async () => {
   await new Promise((r) => mock.listen(SB_PORT, r));
   const srv = spawn(process.execPath, [path.join(__dirname, '..', 'server.js')], {
-    env: { ...process.env, PORT, GOD_PASSWORD: 'test', SUPABASE_URL: SB, SUPABASE_ANON_KEY: 'anon-key', SUPABASE_SERVICE_ROLE_KEY: 'service-key', AUTH_PROVIDERS: 'google, Bad Name!', RECORDS_GITHUB_TOKEN: '', RECORDS_REPO: '' },
+    env: { ...process.env, PORT, GOD_PASSWORD: 'test', SUPABASE_URL: SB, SUPABASE_ANON_KEY: 'anon-key', SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_test', AUTH_PROVIDERS: 'google, Bad Name!', RECORDS_GITHUB_TOKEN: '', RECORDS_REPO: '' },
     cwd: path.join(__dirname, '..'), stdio: ['ignore', 'pipe', 'inherit'],
   });
   await new Promise((r) => srv.stdout.on('data', (d) => { if (String(d).includes('Avalon on')) r(); }));
   try {
     const cfg = await (await fetch(`http://127.0.0.1:${PORT}/api/config`)).json();
-    assert(cfg.url === SB && cfg.anonKey === 'anon-key' && !JSON.stringify(cfg).includes('service-key'), '/api/config 只给公开 key，不泄露 service key');
+    assert(cfg.url === SB && cfg.anonKey === 'anon-key' && !JSON.stringify(cfg).includes('sb_secret_test'), '/api/config 只给公开 key，不泄露 service key');
     assert(JSON.stringify(cfg.providers) === '["google"]', '第三方登录列表会过滤掉不合法的名字');
 
     const a = await mk(); tx(a, { t: 'create', name: 'whatever', token: 'dev-a', auth: 'tok-a' }); await sleep(150);

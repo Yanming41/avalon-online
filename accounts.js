@@ -16,7 +16,8 @@ const publicConfig = () => (enabled() ? { url: URL_, anonKey: ANON, providers: P
 
 const rest = (p, opt = {}) => fetch(`${URL_}/rest/v1/${p}`, {
   ...opt,
-  headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json', ...(opt.headers || {}) },
+  // 新版 sb_secret_ key 不是 JWT，只能放在 apikey 头里；旧版 service_role JWT 两个头都放
+  headers: { apikey: SERVICE, ...(SERVICE.startsWith('sb_') ? {} : { Authorization: `Bearer ${SERVICE}` }), 'Content-Type': 'application/json', ...(opt.headers || {}) },
 });
 
 // 用户 token → 用户 id（找 Supabase 验证，伪造的 token 过不了）；结果缓存 5 分钟

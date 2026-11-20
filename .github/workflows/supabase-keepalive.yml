@@ -27,7 +27,7 @@ jobs:
           # 真正读一行数据（只打 health 接口不一定算"数据库活动"）
           code=$(curl -sS -o body.txt -w '%{http_code}' \
             "$SUPABASE_URL/rest/v1/profiles?select=id&limit=1" \
-            -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+            -H "apikey: $SUPABASE_ANON_KEY")
           echo "HTTP $code"; head -c 200 body.txt; echo
           if [ "$code" != "200" ]; then echo "::error::Supabase 没有正常响应（项目可能已经被暂停，去后台点 Restore）"; exit 1; fi
       - name: Keep this schedule from being auto-disabled
