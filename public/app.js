@@ -1,3 +1,4 @@
+const BRAND = '<h1 class="brand"><img src="/img/brand/deerlon-lockup.webp" alt="Deerlon 阿瓦鹿" width="1200" height="445"></h1>';
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
@@ -118,7 +119,7 @@ function render() {
   const app = $('#app');
   if (HISTORY) { app.innerHTML = historyView(); return animateView(app, 'history:' + !!HIST); }
   if (WATCH) { app.innerHTML = tvView(); return animateView(app, 'tv:' + (S ? S.phase : '')); }
-  if (!S && SPEC) { app.innerHTML = `<h1>阿瓦隆</h1><div class="banner">${online ? `正在进入观众席（房间 ${esc(SPEC.code)}）…` : '连接中…'}</div><button class="sec" onclick="location.href='/'">返回首页</button>`; return; }
+  if (!S && SPEC) { app.innerHTML = `${BRAND}<div class="banner">${online ? `正在进入观众席（房间 ${esc(SPEC.code)}）…` : '连接中…'}</div><button class="sec" onclick="location.href='/'">返回首页</button>`; return; }
   if (!S) { app.innerHTML = homeView(); return animateView(app, 'home'); }
   const meP = S.players.find((p) => p.id === S.me);
   let h = `<div class="top"><span class="dot ${online ? '' : 'off'}"></span>房间 <b>${S.code}</b>
@@ -138,7 +139,7 @@ function render() {
 
 function homeView() {
   const code = new URLSearchParams(location.search).get('r') || localStorage.room || '';
-  return `<h1>阿瓦隆</h1><div class="sub" style="font-family:var(--serif);letter-spacing:3px">卡美洛的忠臣与莫德雷德的爪牙</div>
+  return `${BRAND}<div class="sub" style="font-family:var(--serif);letter-spacing:3px">卡美洛的忠臣与莫德雷德的爪牙</div>
   ${accountHomeCard()}
   <div class="card">${accIn() ? '<h3>进入房间</h3>' : `<h3>选个头像</h3><div class="avpick">${AVATARS.map((a) => `<span class="${a === myAvatar ? 'on' : ''}" onclick="pickAv('${a}')">${avH(a)}</span>`).join('')}</div>
   <input id="nm" placeholder="你的昵称" maxlength="12" value="${esc(localStorage.name || '')}">`}
@@ -640,9 +641,9 @@ const WATCH = new URLSearchParams(location.search).get('watch');
 const SPEC = (() => { const q = new URLSearchParams(location.search); return q.get('spec') && q.get('name') ? { code: q.get('spec'), name: q.get('name') } : null; })();
 if (WATCH) document.body.classList.add('tv');
 function tvView() {
-  if (!S) return `<h1>阿瓦隆 · 观战</h1><div class="banner">${online ? `正在进入房间 ${esc(WATCH)}…` : '连接中…'}</div>`;
+  if (!S) return `${BRAND}<div class="banner">${online ? `正在进入房间 ${esc(WATCH)}…` : '连接中…'}</div>`;
   const joinUrl = location.origin + '/?r=' + S.code;
-  const head = `<div class="tvtitle"><h1>阿瓦隆</h1><span class="code">${S.code}</span><span class="tvjoin">手机打开 <b>${esc(location.host)}</b> 输入房间号加入</span><span class="sp" style="margin-left:auto"><span class="dot ${online ? '' : 'off'}" style="display:inline-block"></span> <span onclick="toggleMute()" style="cursor:pointer;font-size:28px">${muted ? '🔇' : '🔔'}</span></span></div>`;
+  const head = `<div class="tvtitle"><h1 class="brand sm"><img src="/img/brand/deerlon-lockup.webp" alt="Deerlon 阿瓦鹿"></h1><span class="code">${S.code}</span><span class="tvjoin">手机打开 <b>${esc(location.host)}</b> 输入房间号加入</span><span class="sp" style="margin-left:auto"><span class="dot ${online ? '' : 'off'}" style="display:inline-block"></span> <span onclick="toggleMute()" style="cursor:pointer;font-size:28px">${muted ? '🔇' : '🔔'}</span></span></div>`;
   if (S.phase === 'lobby') {
     return head + `<div class="tvgrid"><div class="card"><h3>玩家 ${S.players.length}/10</h3><div class="players">${S.players.map((p) => `<div data-pid="${p.id}" class="p ${p.online ? '' : 'off'}"><span class="av">${avH(p.avatar)}</span>${esc(p.name)}${p.id === S.hostId ? ' <span class="tag lead">房主</span>' : ''}</div>`).join('')}</div></div>
     <div><div class="card center"><div class="mute" style="font-size:22px">手机打开下面的网址加入</div><div class="code" style="font-size:90px">${S.code}</div><div style="font-size:22px">${esc(joinUrl)}</div></div>
