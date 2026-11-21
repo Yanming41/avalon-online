@@ -46,7 +46,9 @@ button .ic{margin-right:6px}
 .seat-av:active{transform:scale(.92)}
 .seat .sn{position:absolute;left:-5px;bottom:-3px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#1a1006;border:1px solid var(--gold);color:var(--gold);font:700 11px/16px 'Cinzel',serif;z-index:2}
 .seat .bd{position:absolute;display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:#1a1006;border:1px solid var(--gold);color:#f3d27a;font-size:13px;z-index:2}
-.seat .bd.lead{top:-9px;left:50%;transform:translateX(-50%);background:linear-gradient(#f0cf7a,#a8792a);color:#2a1b04;border-color:#fff3c4}
+.seat .bd.lead{width:32px;height:32px;top:-16px;left:50%;transform:translateX(-50%);font-size:20px;background:linear-gradient(180deg,#ffe394,#b98122);color:#2a1b04;border:2px solid #fff5cc;box-shadow:0 2px 6px rgba(0,0,0,.85),0 0 12px rgba(243,210,122,.75);z-index:3}
+.seat .bd.lead .ic{stroke-width:2.1}
+.seat .bd.lead .ic path:first-child{fill:currentColor}
 .seat .bd.lady{right:-6px;top:6px;color:#9fd3ff}.seat .bd.exc{right:-6px;bottom:2px}
 .seat .mkb{position:absolute;right:-4px;top:-4px;font-size:12px;z-index:2}
 .seat .sug{position:absolute;left:-8px;top:-4px;display:flex;align-items:center;gap:1px;padding:1px 4px;border-radius:8px;background:var(--evil);color:#fff;font-size:10px;z-index:2}
@@ -206,6 +208,8 @@ body.tv .rt-center .hg .hg-t{font-size:clamp(34px,5vh,64px);font-weight:700}
 body.tv .wait-go{width:110px;height:110px}body.tv .wait-go svg{width:60px;height:60px}
 body.tv .seat-nm{font-size:clamp(18px,2.4vh,30px);margin-top:8px}
 body.tv .seat .sn{transform:scale(1.7)}
+body.tv .seat .bd{width:38px;height:38px;font-size:22px}
+body.tv .seat .bd.lead{width:56px;height:56px;top:-28px;font-size:34px;border-width:3px;box-shadow:0 4px 12px rgba(0,0,0,.9),0 0 20px rgba(243,210,122,.85)}
 body.tv .seat .st{font-size:18px}
 body.tv .seat-role{font-size:20px}
 @media (max-width:1100px){body.tv .tvgame{grid-template-columns:1fr}body.tv .tvtable{order:-1}body.tv .tvtable .rtable{width:min(94vw,80vh)}}
