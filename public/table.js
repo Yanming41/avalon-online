@@ -365,14 +365,16 @@ function speechSetup() {
   if (!spStart || !S.players.some((p) => p.id === spStart)) spStart = S.players[(li + spDir + n) % n].id;
   const order = () => { const s = S.players.findIndex((p) => p.id === spStart); return Array.from({ length: n }, (_, i) => S.players[(s + spDir * i + n * n) % n]); };
   const draw = () => {
-    $('#modal').innerHTML = `<div class="modal" onclick="if(event.target===this)closeModal()"><div class="box spset">
-      <h3 style="margin:0 0 8px;font-family:var(--serif);color:var(--gold);letter-spacing:2px">发言顺序</h3>
+    const inner = `<h3 style="margin:0 0 8px;font-family:var(--serif);color:var(--gold);letter-spacing:2px">发言顺序</h3>
       <div class="row"><button class="${spDir === 1 ? '' : 'sec'}" onclick="spDir=1;spStart=null;speechSetup()">顺时针 ↻</button><button class="${spDir === -1 ? '' : 'sec'}" onclick="spDir=-1;spStart=null;speechSetup()">逆时针 ↺</button></div>
       <div class="mute" style="margin:8px 0 4px">从谁开始（默认队长的${spDir === 1 ? '下一位' : '上一位'}，队长最后总结）：</div>
       <div class="sp-seats">${S.players.map((p, i) => `<span class="${p.id === spStart ? 'on' : ''}" onclick="spStart='${p.id}';speechSetup()">${avH(p.avatar, 'mini')}${i + 1}号 ${esc(p.name)}</span>`).join('')}</div>
       <div class="mute" style="margin:8px 0 4px">顺序预览：</div><div class="sp-prev">${order().map((p) => `${seat(p.id)}`).join(' → ')}</div>
       <button class="okb" onclick="send({t:'speechStart',start:spStart,dir:spDir});closeModal()">${ic('mic')}按这个顺序开始</button>
-      <button class="sec" onclick="closeModal()">取消</button></div></div>`;
+      <button class="sec" onclick="closeModal()">取消</button>`;
+    const cur = $('#modal .box.spset');
+    if (cur) { cur.innerHTML = inner; return; }
+    $('#modal').innerHTML = `<div class="modal" onclick="if(event.target===this)closeModal()"><div class="box spset">${inner}</div></div>`;
   };
   draw();
 }

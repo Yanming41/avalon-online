@@ -78,7 +78,7 @@ button .ic{margin-right:6px}
 
 /* 底部操作栏 */
 main{padding-bottom:190px!important}
-.abar{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:100%;max-width:520px;z-index:30;padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+.abar{position:fixed;left:0;right:0;bottom:0;margin:0 auto;width:100%;max-width:520px;z-index:30;padding:10px 12px calc(10px + env(safe-area-inset-bottom));
   background:linear-gradient(180deg,rgba(28,20,12,.92),rgba(14,10,6,.98));border-top:1px solid rgba(216,173,85,.45);box-shadow:0 -8px 24px rgba(0,0,0,.6);backdrop-filter:blur(6px)}
 .abar .ab-hint{font-size:13px;color:#e4d3ae;text-align:center;margin-bottom:6px;line-height:1.45}
 .abar .ab-side{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-bottom:4px}

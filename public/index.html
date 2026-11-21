@@ -217,7 +217,7 @@ body.tv .tvgrid > div:last-child .card{font-size:18px!important}
 @keyframes glow{0%,100%{box-shadow:0 0 12px #e0b45a55}50%{box-shadow:0 0 22px #e0b45aaa}}
 @keyframes toastIn{from{opacity:0;transform:translate(-50%,20px)}to{opacity:1;transform:translate(-50%,0)}}
 @keyframes toastOut{to{opacity:0;transform:translate(-50%,12px)}}
-.vt > *{animation:rise .5s cubic-bezier(.2,.8,.25,1) both;animation-delay:calc(var(--i,0) * 45ms)}
+.vt > *:not(.abar){animation:rise .5s cubic-bezier(.2,.8,.25,1) both;animation-delay:calc(var(--i,0) * 45ms)}
 .modal{animation:fadeIn .22s both}.modal .box{animation:popIn .32s cubic-bezier(.2,.85,.25,1) both}
 .modal.out{animation:fadeOut .22s both}.modal.out .box{animation:popOut .22s both}
 .lightbox{animation:none;transition:background-color .4s}
