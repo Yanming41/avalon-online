@@ -791,7 +791,45 @@ function tone(freq, start, dur, vol) {
   g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + start + dur);
   o.connect(g).connect(actx.destination); o.start(actx.currentTime + start); o.stop(actx.currentTime + start + dur);
 }
+const VOICE_CLIPS = { '发言时间到': '/audio/timeout.mp3', '好人胜利': '/audio/good_win.mp3', '坏人胜利': '/audio/evil_win.mp3' };
+const voiceRaw = {}, voiceBuf = {};
+let curVoiceSrc = null;
+function preloadVoices() {
+  if (typeof fetch !== 'function') return;
+  for (const url of Object.values(VOICE_CLIPS)) {
+    if (voiceRaw[url]) continue;
+    voiceRaw[url] = fetch(url).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
+  }
+}
+async function playClip(url) {
+  try {
+    const raw = await (voiceRaw[url] || (voiceRaw[url] = fetch(url).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null)));
+    if (!raw || muted) return false;
+    if (actx) {
+      if (actx.state === 'suspended') await actx.resume().catch(() => {});
+      if (actx.state === 'running') {
+        if (!voiceBuf[url]) voiceBuf[url] = await actx.decodeAudioData(raw.slice(0));
+        if (curVoiceSrc) try { curVoiceSrc.stop(); } catch {}
+        const src = actx.createBufferSource();
+        src.buffer = voiceBuf[url];
+        src.connect(actx.destination);
+        src.start();
+        curVoiceSrc = src;
+        return true;
+      }
+    }
+    const a = new Audio(url);
+    await a.play();
+    return true;
+  } catch { return false; }
+}
 function speak(text) {
+  if (muted) return;
+  const clip = VOICE_CLIPS[text];
+  if (clip) { playClip(clip).then((ok) => { if (!ok && !muted) speakFallback(text); }); return; }
+  speakFallback(text);
+}
+function speakFallback(text) {
   if (muted || !window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') return;
   try {
     speechSynthesis.cancel();
@@ -818,7 +856,14 @@ function endAnnounce(winner) {
   setTimeout(() => speak(winner === 'good' ? '好人胜利' : '坏人胜利'), 380);
 }
 function tickSound() { if (muted || !actx) return; tone(660, 0, 0.12, 0.15); }
-function toggleMute() { muted = !muted; localStorage.muted = muted ? '1' : '0'; if (muted && window.speechSynthesis) try { speechSynthesis.cancel(); } catch {} unlockAudio(); if (!muted) tickSound(); render(); }
+function toggleMute() {
+  muted = !muted; localStorage.muted = muted ? '1' : '0';
+  if (muted) {
+    if (curVoiceSrc) try { curVoiceSrc.stop(); } catch {}
+    if (window.speechSynthesis) try { speechSynthesis.cancel(); } catch {}
+  }
+  unlockAudio(); if (!muted) tickSound(); render();
+}
 
 // 计时器只刷新数字，不整页重绘
 function tick() {
@@ -871,5 +916,20 @@ window.addEventListener('blur', off); document.addEventListener('visibilitychang
 document.addEventListener('contextmenu', (e) => isRc(e) && e.preventDefault());
 
 // table.js 在 app.js 之后加载并覆盖部分函数，等所有脚本执行完再首次渲染
-document.addEventListener('DOMContentLoaded', () => { if (WATCH && !muted) unlockAudio(); render(); connect(); });
+document.addEventListener('DOMContentLoaded', () => { preloadVoices(); if (WATCH && !muted) unlockAudio(); render(); connect(); });
+// 空格 / 回车快捷键：推进轮流发言（准备中 -> 开始计时；发言中 -> 下一位），避免误点跳过/结束
+document.addEventListener('keydown', (e) => {
+  if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.code !== 'Space' && e.key !== ' ' && e.key !== 'Enter') return;
+  if (!S || !S.speech || !['propose', 'vote'].includes(S.phase)) return;
+  const m = $('#modal'), rb = $('#rulebook');
+  if ((m && m.innerHTML.trim()) || (rb && rb.open)) return;
+  const t = e.target;
+  if (t && t.closest && t.closest('input,textarea,select,button,a,[contenteditable]')) return;
+  const sp = S.speech, cur = sp.order[sp.idx];
+  const canControl = WATCH || cur === S.me || S.me === S.hostId || S.leader === S.me;
+  if (!canControl) return;
+  e.preventDefault();
+  send({ t: sp.ready ? 'speechGo' : 'speechNext' });
+});
 document.addEventListener('click', (e) => { const sm = e.target.closest && e.target.closest('summary'); if (!sm) return; const d = sm.parentNode; requestAnimationFrame(() => { if (d.open) { d.classList.add('just'); setTimeout(() => d.classList.remove('just'), 400); } }); });

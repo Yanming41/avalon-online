@@ -203,18 +203,21 @@ function centerHint() {
 }
 function speechButtons(sp, allowAdmin, allowSelf) {
   if (!['propose', 'vote'].includes(S.phase)) return '';
-  if (!sp) return allowAdmin ? `<button class="sm sec" onclick="speechSetup()">${ic('mic')}开始轮流发言</button>` : '';
+  if (!sp) return allowAdmin ? `<button class="sm sec spb sp-start" onclick="speechSetup()">${ic('mic')}开始轮流发言</button>` : '';
   const cur = sp.order[sp.idx], mine = allowSelf && cur === S.me;
   let b = '';
-  if (sp.ready && !mine && allowAdmin) b += `<button class="sm sec" onclick="send({t:'speechGo'})">${ic('mic')}替 ${seat(cur)}号 开始计时</button>`;
-  if (!sp.ready && (mine || allowAdmin)) b += `<button class="sm sec" onclick="send({t:'speechNext'})">${ic('next')}${mine ? '我说完了' : '下一位'}</button>`;
-  else if (sp.ready && allowAdmin) b += `<button class="sm sec" onclick="send({t:'speechNext'})">${ic('next')}跳过 ${seat(cur)}号</button>`;
-  if (allowAdmin) b += `<button class="sm sec" onclick="send({t:'speechStop'})">${ic('stop')}结束发言</button>`;
+  if (sp.ready && !mine && allowAdmin) b += `<button class="sm okb spb sp-go" onclick="send({t:'speechGo'})">${ic('mic')}替 ${seat(cur)}号 开始计时</button>`;
+  if (!sp.ready && (mine || allowAdmin)) b += `<button class="sm spb sp-next" onclick="send({t:'speechNext'})">${ic('next')}${mine ? '我说完了' : '下一位'}</button>`;
+  else if (sp.ready && allowAdmin) b += `<button class="sm sec spb sp-skip" onclick="send({t:'speechNext'})">${ic('next')}跳过 ${seat(cur)}号</button>`;
+  if (allowAdmin) b += `<button class="sm sec spb sp-stop" onclick="send({t:'speechStop'})">${ic('stop')}结束发言</button>`;
   return b;
 }
 function tvSpeechBar() {
-  const b = speechButtons(S.speech, true, false);
-  return b ? `<div class="tvspeech">${b}</div>` : '';
+  const sp = S.speech;
+  const b = speechButtons(sp, true, false);
+  if (!b) return '';
+  const keyHint = sp ? `<div class="tvspeech-hint">⌨ 空格 / 回车：${sp.ready ? `替 ${seat(sp.order[sp.idx])}号 开始计时` : '下一位'}</div>` : '';
+  return `<div class="tvspeech">${b}${keyHint}</div>`;
 }
 // ---------- 底部操作栏：每个阶段只有一个主动作，按钮写明结果 ----------
 function actionBar() {

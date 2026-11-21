@@ -48,7 +48,7 @@ const validAvatar = (a) => AVATARS.includes(a) || OLD_AVATARS.includes(a) || acc
 const profileAvatar = (pr) => (accounts.isAvatarUrl(pr.avatar_url) ? pr.avatar_url : AVATARS.includes(pr.crest) ? pr.crest : null);
 
 // ---------- 静态文件 ----------
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.json': 'application/json' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.mp3': 'audio/mpeg', '.json': 'application/json' };
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
   if (p === '/api/config') { // 浏览器登录用的公开配置（只有公开 key，没有 service key）
