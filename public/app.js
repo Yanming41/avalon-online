@@ -16,20 +16,53 @@ function send(o) {
 const god = (a, extra) => send({ t: 'g', a, ...extra });
 const vibrate = (ms) => navigator.vibrate && navigator.vibrate(ms);
 
-// ---------- 连接 & 自动重连 ----------
-function connect() {
-  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  ws.onopen = () => {
-    online = true;
+// ---------- 连接 & 自动重连 + 应用层心跳 ----------
+let reconT = null, hbT = null, pongT = null, reconMs = 1000;
+function stopHb() { clearInterval(hbT); hbT = null; clearTimeout(pongT); pongT = null; }
+function sendPing(timeoutMs = 8000) {
+  const sock = ws;
+  if (!sock || sock.readyState !== 1) return;
+  try { sock.send('{"t":"ping"}'); } catch { return sock.close(); }
+  clearTimeout(pongT);
+  pongT = setTimeout(() => {
+    if (sock !== ws) return;
+    online = false; render();
+    try { sock.close(); } catch {}
+    connect(true);
+  }, timeoutMs);
+}
+function scheduleRecon() {
+  if (reconT) return;
+  const wait = reconMs;
+  reconMs = Math.min(5000, Math.round(reconMs * 1.5));
+  reconT = setTimeout(() => { reconT = null; connect(); }, wait);
+}
+function connect(force) {
+  clearTimeout(reconT); reconT = null;
+  if (!force && ws && ws.readyState < 2) return;
+  const prev = ws;
+  stopHb();
+  const sock = ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
+  if (prev && prev.readyState < 2) try { prev.close(); } catch {}
+  sock.onopen = () => {
+    if (sock !== ws) return;
+    online = true; reconMs = 1000;
+    hbT = setInterval(() => sendPing(8000), 15000);
     // 等账号状态恢复好再自动回房间（登录玩家要带上登录凭证，否则会被当成游客）
-    if (localStorage.room && localStorage.name) whenAuthReady().then(() => send({ t: 'join', code: localStorage.room, name: localStorage.name, avatar: myAvatar, token, auth: authToken() }));
+    if (localStorage.room && localStorage.name) whenAuthReady().then(() => {
+      if (sock !== ws || sock.readyState !== 1 || !localStorage.room || !localStorage.name) return;
+      sock.send(JSON.stringify({ t: 'join', code: localStorage.room, name: localStorage.name, avatar: myAvatar, token, auth: authToken() }));
+    });
     if (localStorage.godRoom && sessionStorage.godPw) send({ t: 'god', code: localStorage.godRoom, password: sessionStorage.godPw });
     if (WATCH) send({ t: 'watch', code: WATCH });
     if (SPEC) send({ t: 'watch', code: SPEC.code, name: SPEC.name });
     render();
   };
-  ws.onmessage = (e) => {
+  sock.onmessage = (e) => {
+    if (sock !== ws) return;
+    clearTimeout(pongT); pongT = null;
     const m = JSON.parse(e.data);
+    if (m.t === 'pong') return;
     if (m.t === 'joined') { localStorage.room = m.code; history.replaceState(null, '', '?r=' + m.code); }
     if (m.t === 'godOk') { localStorage.godRoom = m.code; toast('已进入上帝模式', true); }
     if (m.t === 'kicked') { delete localStorage.room; S = null; toast(m.m); render(); }
@@ -51,9 +84,18 @@ function connect() {
       if (m.m === '密码错误') { delete sessionStorage.godPw; }
     }
   };
-  ws.onclose = () => { online = false; render(); setTimeout(connect, 1200); };
+  sock.onclose = () => {
+    if (sock !== ws) return;
+    stopHb(); online = false; render(); scheduleRecon();
+  };
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden && ws && ws.readyState > 1) connect(); });
+function checkConn() {
+  if (!ws || ws.readyState > 1) connect();
+  else if (ws.readyState === 1) sendPing(3500);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkConn(); });
+window.addEventListener('online', checkConn);
+window.addEventListener('pageshow', (e) => { if (e.persisted) checkConn(); });
 
 const P = (id) => S.players.find((p) => p.id === id) || { name: '?', avatar: '❔' };
 const nm = (id) => `${avH(P(id).avatar, 'mini')}${esc(P(id).name)}`;
@@ -194,7 +236,8 @@ function doGod() {
 }
 function leave() {
   if (!confirm('确定离开房间？（游戏中离开后，用房间号 + 原昵称可以回来）')) return;
-  delete localStorage.room; delete localStorage.godRoom; S = null; history.replaceState(null, '', '/'); ws.close();
+  delete localStorage.room; delete localStorage.godRoom; S = null; history.replaceState(null, '', '/');
+  if (ws && ws.readyState < 2) ws.close(); else { render(); connect(); }
 }
 
 function lobbyView() {

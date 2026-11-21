@@ -193,7 +193,7 @@ function broadcast(room) {
     ws.send(JSON.stringify({ t: 'state', s: v }));
   }
 }
-const err = (ws, m) => ws.send(JSON.stringify({ t: 'error', m }));
+const err = (ws, m) => { if (ws.readyState === 1) ws.send(JSON.stringify({ t: 'error', m })); };
 
 // ---------- 发言计时 ----------
 function clearSpeech(room) { const g = room.game; clearTimeout(room.speechTimer); if (g) g.speech = null; }
@@ -564,11 +564,18 @@ const wss = new WebSocketServer({ server });
 const godFails = new Map(); // ip -> 连续输错次数
 wss.on('connection', (ws, req) => {
   ws._ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  ws._missed = 0;
+  ws.on('pong', () => { ws._missed = 0; });
   let room = null, pid = null;
   // 启动后不久第一次有人连进来时，先拉最新快照再处理消息（每条连接内保持顺序）
-  ws.on('message', (raw) => { ws._q = (ws._q || Promise.resolve()).then(() => (state.needRefresh() ? refreshRooms() : null)).then(() => onMsg(raw)).catch((e) => console.log('msg error', e)); });
-  const onMsg = async (raw) => {
+  ws.on('message', (raw) => {
+    ws._missed = 0;
     let msg; try { msg = JSON.parse(raw); } catch { return; }
+    if (msg && msg.t === 'ping') { if (ws.readyState === 1) ws.send('{"t":"pong"}'); return; }
+    ws._q = (ws._q || Promise.resolve()).then(() => (state.needRefresh() ? refreshRooms() : null)).then(() => onMsg(msg)).catch((e) => console.log('msg error', e));
+  });
+  const onMsg = async (msg) => {
+    if (!msg || typeof msg !== 'object') return;
     if (msg.t === 'create' || msg.t === 'join') {
       let name = String(msg.name || '').trim().slice(0, 12);
       const token = String(msg.token || '').slice(0, 64);
@@ -577,9 +584,11 @@ wss.on('connection', (ws, req) => {
       let acct = null;
       if (msg.auth && accounts.enabled()) {
         acct = await accounts.lookup(msg.auth);
+        if (ws.readyState !== 1) return;
         if (!acct) return err(ws, '登录已过期，请重新登录（或者先退出登录，以游客身份加入）');
         name = acct.display_name.slice(0, 12); avatar = profileAvatar(acct) || avatar;
       }
+      if (ws.readyState !== 1) return;
       if (!name || !token) return err(ws, '请输入昵称');
       if (msg.t === 'create') {
         room = { code: newCode(), players: [], roles: {}, game: null, gods: new Set(), watchers: new Set(), settings: { ...DEFAULT_SETTINGS }, touched: Date.now() };
@@ -617,6 +626,7 @@ wss.on('connection', (ws, req) => {
       const me = room && room.players.find((x) => x.id === pid);
       if (!me || !me.userId || !accounts.enabled()) return;
       const acct = await accounts.lookup(msg.auth);
+      if (ws.readyState !== 1) return;
       if (!acct || acct.id !== me.userId) return err(ws, '登录已过期，请重新登录');
       const name = acct.display_name.slice(0, 12);
       if (!room.game && name !== me.name) {
@@ -683,9 +693,13 @@ wss.on('connection', (ws, req) => {
 
 // 6 小时没人动的房间清掉
 setInterval(() => { const t = Date.now(); for (const [c, r] of rooms) if (t - r.touched > 6 * 3600e3) { clearTimeout(r.speechTimer); rooms.delete(c); state.schedule(rooms); } }, 600e3);
-// 心跳，防止云平台断开空闲连接
-setInterval(() => wss.clients.forEach((c) => { if (c._alive === false) return c.terminate(); c._alive = false; if (c.readyState === 1) c.ping(); }), 20e3);
-wss.on('connection', (c) => { c._alive = true; c.on('pong', () => { c._alive = true; }); });
+// 心跳，防止云平台断开空闲连接（连续 3 个周期无任何 pong 或消息才判死，避免手机切后台几秒被误杀）
+setInterval(() => wss.clients.forEach((c) => {
+  if (c.readyState !== 1) return;
+  c._missed = (c._missed || 0) + 1;
+  if (c._missed >= 3) return c.terminate();
+  c.ping();
+}), 20e3);
 
 // ---------- 对局续存：启动时读回快照 ----------
 function restoreRoom(r) {
