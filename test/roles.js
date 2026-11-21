@@ -95,8 +95,10 @@ async function playQuest(R, team, cardFn, opts = {}) {
     const goods = S().players.map((p) => p.id).filter((id) => !R.role(id).evil && id !== gs);
     await playQuest(R, [es, goods[0]], (id) => (id === es ? 'M' : 'S'));
     assert(!S().results[0].success && S().results[0].magics === 1, '一张魔法：成功 → 失败');
-    await playQuest(R, [es, gs, goods[0]], (id) => (id === goods[0] ? 'S' : 'M'));
-    assert(S().results[1].success && S().results[1].magics === 2, '两张魔法互相抵消');
+    let esCards = null;
+    await playQuest(R, [es, gs, goods[0]], (id, mc) => { if (id === es) esCards = mc; return id === goods[0] ? 'S' : mc.includes('M') ? 'M' : 'S'; });
+    assert(JSON.stringify(esCards) === '["S"]', '邪恶巫师魔法用过后只能出成功');
+    assert(!S().results[1].success && S().results[1].magics === 1, '正义巫师首次魔法仍可用');
     R.close();
   }
   // ---------- 5. 湖中仙女 + 捣蛋鬼 + 诡术师 ----------

@@ -122,7 +122,7 @@ function knowledge(room, pid) {
 // 这个人这轮能出哪些任务牌
 function allowedCards(room, pid) {
   const r = room.roles[pid], q = room.game.quest;
-  if (r === 'good_sorcerer' || r === 'evil_sorcerer') return ['S', 'M'];
+  if (r === 'good_sorcerer' || r === 'evil_sorcerer') return (room.game.magicUsed || {})[pid] ? ['S'] : ['S', 'M']; // 魔法牌每局限用 1 次
   if (!evilNow(room, pid)) return ['S'];
   if (r === 'lunatic') return ['F'];
   if (r === 'brute') return q <= 2 ? ['S', 'F'] : ['S'];
@@ -390,6 +390,7 @@ function handle(room, pid, msg, ws) {
       const card = msg.card || (msg.success === false ? 'F' : 'S');
       if (!allowedCards(room, pid).includes(card)) return err(ws, '你不能出这张牌');
       g.questCards[pid] = card;
+      if (card === 'M') (g.magicUsed = g.magicUsed || {})[pid] = true;
       if (Object.keys(g.questCards).length < g.team.length) break;
       if (g.excalibur) { g.phase = 'excalibur'; break; }
       finishQuest(room); break;
