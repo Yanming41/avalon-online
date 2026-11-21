@@ -40,6 +40,7 @@ function connect() {
       if (S.phase === 'propose' && S.leader === S.me && (!prev || prev.leader !== S.me || prev.phase !== 'propose')) vibrate([80, 60, 80]);
       if (S.speech && S.speech.order[S.speech.idx] === S.me && (!prev || !prev.speech || prev.speech.idx !== S.speech.idx)) vibrate(200);
       if (prev && prev.gameId === S.gameId && (S.bellSeq || 0) > (prev.bellSeq || 0)) bell();
+      if (prev && prev.gameId === S.gameId && prev.phase !== 'end' && S.phase === 'end') endAnnounce(S.winner);
       if (S.myRole) preload(S.myRole.art);
       render(); maybeEvent();
     }
@@ -730,8 +731,15 @@ function rulesView() {
 }
 
 // ---------- 铃声（Web Audio 合成，无需音频文件） ----------
-let actx = null, lastWarnKey = null, muted = localStorage.muted === '1';
-function unlockAudio() { if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch {} } if (actx && actx.state === 'suspended') actx.resume(); }
+let actx = null, lastWarnKey = null, muted = localStorage.muted === '1', ttsUnlocked = false;
+function unlockAudio() {
+  if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch {} }
+  if (actx && actx.state === 'suspended') actx.resume();
+  if (!ttsUnlocked && window.speechSynthesis && typeof SpeechSynthesisUtterance !== 'undefined') {
+    ttsUnlocked = true;
+    try { const u = new SpeechSynthesisUtterance(''); u.volume = 0; speechSynthesis.speak(u); speechSynthesis.getVoices(); } catch {}
+  }
+}
 document.addEventListener('touchend', unlockAudio, { passive: true }); document.addEventListener('click', unlockAudio);
 function tone(freq, start, dur, vol) {
   const o = actx.createOscillator(), g = actx.createGain(); o.type = 'sine'; o.frequency.value = freq;
@@ -739,9 +747,34 @@ function tone(freq, start, dur, vol) {
   g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + start + dur);
   o.connect(g).connect(actx.destination); o.start(actx.currentTime + start); o.stop(actx.currentTime + start + dur);
 }
-function bell() { if (muted || !actx) return; [0, 0.35, 0.7].forEach((t) => { tone(880, t, 0.9, 0.35); tone(1320, t, 0.6, 0.12); }); vibrate([200, 100, 200]); }
+function speak(text) {
+  if (muted || !window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN'; u.rate = 1.05;
+    const vs = speechSynthesis.getVoices ? speechSynthesis.getVoices() : [];
+    const zh = vs.find((v) => /^zh[-_]?cn/i.test(v.lang)) || vs.find((v) => /^zh/i.test(v.lang));
+    if (zh) u.voice = zh;
+    speechSynthesis.speak(u);
+  } catch {}
+}
+function bell() {
+  if (muted) return;
+  if (actx) [0, 0.28].forEach((t) => { tone(880, t, 0.7, 0.3); tone(1320, t, 0.5, 0.1); });
+  vibrate([200, 100, 200]);
+  setTimeout(() => speak('发言时间到'), 380);
+}
+function endAnnounce(winner) {
+  if (muted) return;
+  if (actx) {
+    const notes = winner === 'good' ? [523.25, 659.25, 783.99, 1046.5] : [392, 311.13, 261.63, 196];
+    notes.forEach((f, i) => tone(f, i * 0.09, 0.55, 0.18));
+  }
+  setTimeout(() => speak(winner === 'good' ? '好人胜利' : '坏人胜利'), 380);
+}
 function tickSound() { if (muted || !actx) return; tone(660, 0, 0.12, 0.15); }
-function toggleMute() { muted = !muted; localStorage.muted = muted ? '1' : '0'; unlockAudio(); if (!muted) tickSound(); render(); }
+function toggleMute() { muted = !muted; localStorage.muted = muted ? '1' : '0'; if (muted && window.speechSynthesis) try { speechSynthesis.cancel(); } catch {} unlockAudio(); if (!muted) tickSound(); render(); }
 
 // 计时器只刷新数字，不整页重绘
 function tick() {
