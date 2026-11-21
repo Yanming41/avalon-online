@@ -644,7 +644,8 @@ if (WATCH) document.body.classList.add('tv');
 function tvView() {
   if (!S) return `${BRAND}<div class="banner">${online ? `正在进入房间 ${esc(WATCH)}…` : '连接中…'}</div>`;
   const joinUrl = location.origin + '/?r=' + S.code;
-  const head = `<div class="tvtitle"><h1 class="brand sm"><img src="/img/brand/deerlon-lockup.webp" alt="Deerlon 阿瓦鹿"></h1><span class="code">${S.code}</span><span class="tvjoin">手机打开 <b>${esc(location.host)}</b> 输入房间号加入</span><span class="sp" style="margin-left:auto"><span class="dot ${online ? '' : 'off'}" style="display:inline-block"></span> <span onclick="toggleMute()" style="cursor:pointer;font-size:28px">${muted ? '🔇' : '🔔'}</span></span></div>`;
+  const tvAud = WATCH && !muted && (!actx || actx.state !== 'running') ? `<button class="sm sec" style="vertical-align:middle;margin-right:8px" onclick="unlockAudio();tickSound();render()">🔊 点此开启大屏音效</button>` : '';
+  const head = `<div class="tvtitle"><h1 class="brand sm"><img src="/img/brand/deerlon-lockup.webp" alt="Deerlon 阿瓦鹿"></h1><span class="code">${S.code}</span><span class="tvjoin">手机打开 <b>${esc(location.host)}</b> 输入房间号加入</span><span class="sp" style="margin-left:auto">${tvAud}<span class="dot ${online ? '' : 'off'}" style="display:inline-block"></span> <span onclick="toggleMute()" style="cursor:pointer;font-size:28px">${muted ? '🔇' : '🔔'}</span></span></div>`;
   if (S.phase === 'lobby') {
     return head + `<div class="tvgrid"><div class="card"><h3>玩家 ${S.players.length}/10</h3><div class="players">${S.players.map((p) => `<div data-pid="${p.id}" class="p ${p.online ? '' : 'off'}"><span class="av">${avH(p.avatar)}</span>${esc(p.name)}${p.id === S.hostId ? ' <span class="tag lead">房主</span>' : ''}</div>`).join('')}</div></div>
     <div><div class="card center"><div class="mute" style="font-size:22px">手机打开下面的网址加入</div><div class="code" style="font-size:90px">${S.code}</div><div style="font-size:22px">${esc(joinUrl)}</div></div>
@@ -734,13 +735,13 @@ function rulesView() {
 let actx = null, lastWarnKey = null, muted = localStorage.muted === '1', ttsUnlocked = false;
 function unlockAudio() {
   if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch {} }
-  if (actx && actx.state === 'suspended') actx.resume();
+  if (actx && actx.state === 'suspended') actx.resume().then(() => { if (WATCH && actx.state === 'running') render(); }).catch(() => {});
   if (!ttsUnlocked && window.speechSynthesis && typeof SpeechSynthesisUtterance !== 'undefined') {
     ttsUnlocked = true;
     try { const u = new SpeechSynthesisUtterance(''); u.volume = 0; speechSynthesis.speak(u); speechSynthesis.getVoices(); } catch {}
   }
 }
-document.addEventListener('touchend', unlockAudio, { passive: true }); document.addEventListener('click', unlockAudio);
+document.addEventListener('touchend', unlockAudio, { passive: true }); document.addEventListener('click', unlockAudio); document.addEventListener('keydown', unlockAudio);
 function tone(freq, start, dur, vol) {
   const o = actx.createOscillator(), g = actx.createGain(); o.type = 'sine'; o.frequency.value = freq;
   g.gain.setValueAtTime(0, actx.currentTime + start); g.gain.linearRampToValueAtTime(vol, actx.currentTime + start + 0.01);
@@ -786,6 +787,11 @@ function tick() {
     const key = el.dataset.end + ':' + left; // 最后 5 秒每秒滴一声
     if (left > 0 && left <= 5 && key !== lastWarnKey) { lastWarnKey = key; tickSound(); }
   });
+  document.querySelectorAll('.hg[data-end]').forEach((el) => {
+    const left = Math.max(0, Math.ceil((+el.dataset.end - now) / 1000));
+    const key = el.dataset.end + ':' + left;
+    if (left > 0 && left <= 5 && key !== lastWarnKey) { lastWarnKey = key; tickSound(); }
+  });
   document.querySelectorAll('.bar i[data-end]').forEach((el) => { el.style.width = Math.max(0, Math.min(100, ((+el.dataset.end - now) / 1000 / +el.dataset.secs) * 100)) + '%'; });
 }
 setInterval(tick, 500);
@@ -822,5 +828,5 @@ window.addEventListener('blur', off); document.addEventListener('visibilitychang
 document.addEventListener('contextmenu', (e) => isRc(e) && e.preventDefault());
 
 // table.js 在 app.js 之后加载并覆盖部分函数，等所有脚本执行完再首次渲染
-document.addEventListener('DOMContentLoaded', () => { render(); connect(); });
+document.addEventListener('DOMContentLoaded', () => { if (WATCH && !muted) unlockAudio(); render(); connect(); });
 document.addEventListener('click', (e) => { const sm = e.target.closest && e.target.closest('summary'); if (!sm) return; const d = sm.parentNode; requestAnimationFrame(() => { if (d.open) { d.classList.add('just'); setTimeout(() => d.classList.remove('just'), 400); } }); });
