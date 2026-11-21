@@ -110,12 +110,49 @@ function sweep(f0, f1, start, dur, vol, type) {
   g.gain.setValueAtTime(vol, a.currentTime + start); g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + start + dur);
   o.connect(g).connect(a.destination); o.start(a.currentTime + start); o.stop(a.currentTime + start + dur);
 }
+function harpNote(freq, start, dur, vol) {
+  const a = actx, t0 = a.currentTime + start;
+  const flt = a.createBiquadFilter(), g = a.createGain();
+  flt.type = 'lowpass'; flt.frequency.setValueAtTime(Math.min(4800, freq * 4.5), t0);
+  flt.frequency.exponentialRampToValueAtTime(Math.max(900, freq * 1.6), t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(vol, t0 + 0.014);
+  g.gain.exponentialRampToValueAtTime(0.0008, t0 + dur);
+  flt.connect(g).connect(a.destination);
+  [['triangle', freq, 0.7], ['sine', freq * 1.003, 0.45], ['sine', freq * 2, 0.18]].forEach(([type, f, w]) => {
+    const o = a.createOscillator(), og = a.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0); og.gain.value = w;
+    o.connect(og).connect(flt); o.start(t0); o.stop(t0 + dur + 0.02);
+  });
+}
+function glassClink(baseFreq, start, dur, vol) {
+  const a = actx, t0 = a.currentTime + start;
+  const len = Math.ceil(a.sampleRate * 0.018), buf = a.createBuffer(1, len, a.sampleRate), ch = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+  const src = a.createBufferSource(), bp = a.createBiquadFilter(), ng = a.createGain();
+  src.buffer = buf; bp.type = 'bandpass'; bp.frequency.value = Math.min(7000, baseFreq * 3.1); bp.Q.value = 3.2;
+  ng.gain.value = vol * 0.9; src.connect(bp).connect(ng).connect(a.destination); src.start(t0);
+  [[baseFreq, dur, 1.0], [baseFreq * 1.0025, dur * 0.95, 0.55], [baseFreq * 2.02, dur * 0.55, 0.28], [baseFreq * 3.18, dur * 0.22, 0.12]].forEach(([f, d, w]) => {
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(f, t0);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(vol * w, t0 + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0006, t0 + d);
+    o.connect(g).connect(a.destination); o.start(t0); o.stop(t0 + d + 0.02);
+  });
+}
 function throwSound(k) {
   if (muted || !actx) return;
   if (k === 'egg') { sweep(2400, 1200, 0, 0.04, 0.25, 'square'); noise(0.02, 0.35, 0.8, 3000, 300); }
   else if (k === 'tomato') { sweep(180, 60, 0, 0.15, 0.6); noise(0, 0.45, 1, 1800, 150); }
   else if (k === 'cabbage') { noise(0, 0.25, 0.7, 900, 200); sweep(300, 120, 0.05, 0.2, 0.3, 'triangle'); sweep(200, 90, 0.3, 0.5, 0.15, 'sawtooth'); }
   else if (k === 'shoe') { sweep(140, 45, 0, 0.25, 0.9); noise(0, 0.12, 0.6, 1200, 200); [0.25, 0.4, 0.55].forEach((s, i) => tone(1400 + i * 300, s, 0.15, 0.1)); }
-  else if (k === 'rose') { [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, i * 0.09, 0.6, 0.15)); }
-  else if (k === 'goblet') { tone(2637, 0, 1.2, 0.18); tone(3520, 0.01, 0.9, 0.1); noise(0.15, 0.5, 0.35, 4000, 600, 'bandpass'); }
+  else if (k === 'rose') {
+    noise(0, 0.22, 0.07, 1600, 3200, 'bandpass');
+    [349.23, 440, 523.25, 659.25, 783.99, 1046.5].forEach((f, i) => harpNote(f, i * 0.068, 0.85 + i * 0.09, 0.14));
+  }
+  else if (k === 'goblet') {
+    glassClink(1396.9, 0, 1.5, 0.22);
+    glassClink(1760, 0.085, 1.45, 0.18);
+    noise(0.14, 0.45, 0.04, 6500, 3800, 'highpass');
+    [0.24, 0.34, 0.45, 0.58].forEach((t, i) => tone(3800 + i * 420, t, 0.06, 0.025));
+  }
 }
