@@ -200,6 +200,8 @@ body.tv .tvside{min-width:0;align-self:center}
 body.tv .tvside .banner{font-size:clamp(20px,2.4vh,30px)}
 body.tv .tvside .qt .q, body.tv .tvside .q{font-size:clamp(26px,3vh,40px)}
 body.tv .tvtable .rtable{max-width:none;width:min(84vh,52vw);margin:0 auto}
+.tvspeech{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:8px}
+body.tv .tvspeech button.sm{font-size:clamp(14px,1.8vh,20px);padding:10px 16px;display:inline-flex;align-items:center}
 body.tv .rt-center{gap:10px}
 body.tv .cs-t{font-size:clamp(28px,3.6vh,52px);letter-spacing:4px}
 body.tv .cs-s{font-size:clamp(18px,2.2vh,30px)}

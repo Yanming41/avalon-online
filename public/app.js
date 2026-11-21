@@ -661,7 +661,7 @@ function tvView() {
   else if (S.phase === 'end') banner = `${S.winner === 'good' ? '🏆 正义阵营获胜' : '😈 邪恶阵营获胜'} · ${esc(S.reason)}`;
   const bstyle = S.phase === 'end' ? `background:${S.winner === 'good' ? 'var(--good)' : 'var(--evil)'};color:#fff` : S.phase === 'assassin' ? 'background:#5e1d1d;color:#fff' : '';
   // 大屏：左边是放大的圆桌（中间大沙漏/大字），右边是任务进度和票型
-  let left = `<div class="tvtable">${roundTable(centerStage())}</div>`;
+  let left = `<div class="tvtable">${roundTable(centerStage())}${typeof tvSpeechBar === 'function' ? tvSpeechBar() : ''}</div>`;
   let right = `<div class="banner" style="${bstyle}">${banner}</div>` + questTrack();
   if (S.phase === 'end') right += `<div class="card"><h3>身份揭晓</h3><div class="gallery" style="grid-template-columns:repeat(5,1fr)">${S.allRoles.map((r) => `<div class="gi ${r.evil ? 'e' : 'g'} ${S.assassinTarget === r.id ? 'dead' : ''}"><img class="portrait" src="${img(r.art)}" alt="" onerror="this.onerror=null;this.src='${img(r.role)}'"><div class="cap" style="font-size:15px">${seat(r.id)}号 ${nm(r.id)}<br><b style="color:${r.evil ? '#ff8a85' : '#9cc3ff'}">${r.name}</b></div></div>`).join('')}</div></div>`;
   const side2 = infoCard() + voteMatrix();

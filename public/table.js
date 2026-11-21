@@ -201,6 +201,21 @@ function centerHint() {
   const m = { propose: `等待 ${seat(S.leader)}号 组队`, vote: `投票中 ${S.voted.length}/${S.players.length}`, quest: '队员出牌中', excalibur: '王者之剑', lady: '湖中仙女查验中', assassin: '刺杀环节', end: '本局结束' };
   return m[S.phase] || '';
 }
+function speechButtons(sp, allowAdmin, allowSelf) {
+  if (!['propose', 'vote'].includes(S.phase)) return '';
+  if (!sp) return allowAdmin ? `<button class="sm sec" onclick="speechSetup()">${ic('mic')}开始轮流发言</button>` : '';
+  const cur = sp.order[sp.idx], mine = allowSelf && cur === S.me;
+  let b = '';
+  if (sp.ready && !mine && allowAdmin) b += `<button class="sm sec" onclick="send({t:'speechGo'})">${ic('mic')}替 ${seat(cur)}号 开始计时</button>`;
+  if (!sp.ready && (mine || allowAdmin)) b += `<button class="sm sec" onclick="send({t:'speechNext'})">${ic('next')}${mine ? '我说完了' : '下一位'}</button>`;
+  else if (sp.ready && allowAdmin) b += `<button class="sm sec" onclick="send({t:'speechNext'})">${ic('next')}跳过 ${seat(cur)}号</button>`;
+  if (allowAdmin) b += `<button class="sm sec" onclick="send({t:'speechStop'})">${ic('stop')}结束发言</button>`;
+  return b;
+}
+function tvSpeechBar() {
+  const b = speechButtons(S.speech, true, false);
+  return b ? `<div class="tvspeech">${b}</div>` : '';
+}
 // ---------- 底部操作栏：每个阶段只有一个主动作，按钮写明结果 ----------
 function actionBar() {
   const iLead = S.leader === S.me, host = S.me === S.hostId, need = S.teamSizes[S.quest], n = S.players.length;
@@ -210,14 +225,9 @@ function actionBar() {
   const sp = S.speech;
   if (sp && ['propose', 'vote'].includes(S.phase)) {
     const cur = sp.order[sp.idx], mine = cur === S.me;
-    if (sp.ready) {
-      if (mine) { hint = '轮到你发言了，准备好就点开始，沙漏开始计时'; main = `<button class="okb go" onclick="send({t:'speechGo'})">${ic('mic')}开始发言</button>`; }
-      else if (iLead || host) side += `<button class="sm sec" onclick="send({t:'speechGo'})">${ic('mic')}替 ${seat(cur)}号 开始计时</button>`;
-    }
-    if (!sp.ready && (mine || iLead || host)) side += `<button class="sm sec" onclick="send({t:'speechNext'})">${ic('next')}${mine ? '我说完了' : '下一位'}</button>`;
-    else if (sp.ready && (iLead || host)) side += `<button class="sm sec" onclick="send({t:'speechNext'})">${ic('next')}跳过 ${seat(cur)}号</button>`;
-    if (iLead || host) side += `<button class="sm sec" onclick="send({t:'speechStop'})">${ic('stop')}结束发言</button>`;
-  } else if (['propose', 'vote'].includes(S.phase) && (iLead || host)) side += `<button class="sm sec" onclick="speechSetup()">${ic('mic')}开始轮流发言</button>`;
+    if (sp.ready && mine) { hint = '轮到你发言了，准备好就点开始，沙漏开始计时'; main = `<button class="okb go" onclick="send({t:'speechGo'})">${ic('mic')}开始发言</button>`; }
+  }
+  side += speechButtons(sp, iLead || host, true);
 
   const speechHint = sp && sp.ready && ['propose', 'vote'].includes(S.phase) && sp.order[sp.idx] !== S.me ? `等待 ${seat(sp.order[sp.idx])}号 开始发言 · ` : '';
   if (!S.me) { hint = isGod() ? '上帝视角：在上方选择玩家可代入操作' : `观众席 · ${centerHint()}`; }

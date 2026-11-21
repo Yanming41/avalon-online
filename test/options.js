@@ -56,5 +56,28 @@ async function winThree(R) {
     const roles = R.cl.map((c) => c.s.myRole.role);
     ok(roles.includes('good_sorcerer') && !roles.includes('evil_sorcerer'), '只选正义巫师时只有正义巫师');
   }
+  { // 投屏大屏控制发言（观众席不能）
+    const R = await room(6, {});
+    const code = R.S().code, ids = R.S().players.map((p) => p.id);
+    const tv = new WebSocket(URL), spec = new WebSocket(URL);
+    await Promise.all([new Promise((r) => tv.on('open', r)), new Promise((r) => spec.on('open', r))]);
+    let tvS = null, specErr = null;
+    tv.on('message', (d) => { const m = JSON.parse(d); if (m.t === 'state') tvS = m.s; });
+    spec.on('message', (d) => { const m = JSON.parse(d); if (m.t === 'error') specErr = m.m; });
+    tv.send(JSON.stringify({ t: 'watch', code })); spec.send(JSON.stringify({ t: 'watch', code, name: '路人' })); await sleep(100);
+    spec.send(JSON.stringify({ t: 'speechStart', start: ids[0], dir: 1 })); await sleep(80);
+    ok(!tvS.speech && specErr, '观众席不能控制发言');
+    tv.send(JSON.stringify({ t: 'speechStart', start: ids[1], dir: 1 })); await sleep(80);
+    ok(tvS.speech && tvS.speech.order[0] === ids[1] && tvS.speech.ready, '大屏可以开始轮流发言');
+    tv.send(JSON.stringify({ t: 'speechGo' })); await sleep(80);
+    ok(tvS.speech && !tvS.speech.ready && tvS.speech.endsAt > Date.now(), '大屏可以替发言人开始计时');
+    tv.send(JSON.stringify({ t: 'speechNext' })); await sleep(80);
+    ok(tvS.speech && tvS.speech.idx === 1 && tvS.speech.ready, '大屏可以点下一位');
+    tv.send(JSON.stringify({ t: 'speechNext' })); await sleep(80);
+    ok(tvS.speech && tvS.speech.idx === 2 && tvS.speech.ready, '大屏可以跳过准备中的发言人');
+    tv.send(JSON.stringify({ t: 'speechStop' })); await sleep(80);
+    ok(!tvS.speech, '大屏可以结束发言');
+    tv.close(); spec.close();
+  }
   console.log(fails ? fails + ' 项失败' : '全部通过'); process.exit(fails ? 1 : 0);
 })();

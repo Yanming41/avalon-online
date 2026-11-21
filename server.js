@@ -225,7 +225,31 @@ function speechGo(room) {
   armSpeechTimer(room);
 }
 
-// ---------- 游戏流程 ----------
+function handleSpeech(room, msg, pid, isAdmin) {
+  const g = room.game;
+  if (!g) return false;
+  if (msg.t === 'speechStart') {
+    if (!['propose', 'vote'].includes(g.phase) || !isAdmin) return true;
+    startSpeech(room, msg.start, msg.dir); return true;
+  }
+  if (msg.t === 'speechNext') {
+    if (!g.speech) return true;
+    const cur = g.speech.order[g.speech.idx];
+    if (pid !== cur && !isAdmin) return true;
+    nextSpeaker(room); return true;
+  }
+  if (msg.t === 'speechGo') {
+    if (!g.speech) return true;
+    const cur = g.speech.order[g.speech.idx];
+    if (pid !== cur && !isAdmin) return true;
+    speechGo(room); return true;
+  }
+  if (msg.t === 'speechStop') {
+    if (!isAdmin) return true;
+    clearSpeech(room); return true;
+  }
+  return false;
+}
 function startGame(room) {
   const n = room.players.length;
   if (n < 5) return `至少 5 人，现在 ${n} 人`;
@@ -331,22 +355,10 @@ function handle(room, pid, msg, ws) {
       if (!g || room.roles[pid] !== 'trickster') return;
       g.trickShowEvil[pid] = !!msg.evil; break;
     case 'speechStart':
-      if (!g || !['propose', 'vote'].includes(g.phase) || (pid !== leaderId && !isHost)) return;
-      startSpeech(room, msg.start, msg.dir); break;
-    case 'speechNext': {
-      if (!g || !g.speech) return;
-      const cur = g.speech.order[g.speech.idx];
-      if (pid !== cur && pid !== leaderId && !isHost) return;
-      nextSpeaker(room); break;
-    }
-    case 'speechGo': {
-      if (!g || !g.speech) return;
-      const cur = g.speech.order[g.speech.idx];
-      if (pid !== cur && pid !== leaderId && !isHost) return;
-      speechGo(room); break;
-    }
+    case 'speechNext':
+    case 'speechGo':
     case 'speechStop':
-      if (!g || (pid !== leaderId && !isHost)) return; clearSpeech(room); break;
+      handleSpeech(room, msg, pid, pid === leaderId || isHost); break;
     case 'propose': {
       if (!g || g.phase !== 'propose' || leaderId !== pid) return;
       const size = (g.teamSizes || teamFor(room))[g.quest];
@@ -651,6 +663,10 @@ wss.on('connection', (ws, req) => {
       const out = JSON.stringify({ t: 'throw', from: isP ? pid : null, fromName: isP ? null : ws._wname, to, item, id: crypto.randomUUID() });
       for (const p of room.players) if (p.ws && p.ws.readyState === 1) p.ws.send(out);
       for (const w of [...room.watchers, ...room.gods]) if (w.readyState === 1) w.send(out);
+      return;
+    }
+    if (room.watchers.has(ws) && !ws._wname && ['speechStart', 'speechNext', 'speechGo', 'speechStop'].includes(msg.t)) {
+      if (handleSpeech(room, msg, null, true)) broadcast(room);
       return;
     }
     if (!room.players.some((p) => p.id === pid)) return err(ws, '你不在房间里');
