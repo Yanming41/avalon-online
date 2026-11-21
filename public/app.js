@@ -651,7 +651,7 @@ function tvView() {
   }
   const n = S.players.length, need = S.teamSizes[S.quest];
   let banner = '';
-  if (S.phase === 'propose') banner = `第 ${S.quest + 1} 轮 · 第 ${S.rejects + 1} 次组队 · 👑 ${nm(S.leader)} 选 ${need} 人`;
+  if (S.phase === 'propose') banner = `第 ${S.quest + 1} 轮 · 第 ${S.rejects + 1} 次组队 · <span style="font-size:1.35em;vertical-align:-.06em">👑</span> ${nm(S.leader)} 选 ${need} 人`;
   else if (S.phase === 'vote') banner = `🚗 发车投票中（${S.voted.length}/${n} 已投）`;
   else if (S.phase === 'quest') banner = `⚔️ 任务执行中（${S.questDone.length}/${S.team.length}）${S.quest === 3 && S.twoFailQuest4 ? ' · 需要 2 张失败' : ''}`;
   else if (S.phase === 'excalibur') banner = `🔱 ${nm(S.excalibur)} 正在决定是否使用王者之剑`;
