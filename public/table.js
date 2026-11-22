@@ -468,17 +468,26 @@ function gameView() {
 }
 
 // ---------- 大厅：预设板子 ----------
+const PRESET_BASE = {
+  percival: false, cleric: false, troublemaker: false, good_sorcerer: false, untrustworthy: false, good_rogue: false,
+  assassin: false, morgana: false, mordred: false, oberon: false, lunatic: false, brute: false, revealer: false, trickster: false, evil_sorcerer: false, evil_rogue: false,
+  lancelot: 0, messengers: false, lady: false, excalibur: false, trapper: false, plot: false,
+};
 const PRESETS = [
-  { name: '新手标准局', sub: '5–10 人 · 梅林 刺客 派西维尔 莫甘娜', s: { percival: true, morgana: true, mordred: false, oberon: false, cleric: false, troublemaker: false, lunatic: false, brute: false, revealer: false, trickster: false, good_sorcerer: false, evil_sorcerer: false, assassin: true, lancelot: 0, lady: false, excalibur: false }, art: ['merlin', 'percival', 'morgana', 'assassin'] },
-  { name: '进阶局', sub: '7 人起 · 加莫德雷德 · 湖中仙女', s: { percival: true, morgana: true, mordred: true, oberon: false, cleric: false, troublemaker: false, lunatic: false, brute: false, revealer: false, trickster: false, good_sorcerer: false, evil_sorcerer: false, assassin: true, lancelot: 0, lady: true, excalibur: false }, art: ['merlin', 'percival', 'mordred', 'morgana'] },
-  { name: '兰斯洛特局', sub: '8 人起 · 双兰斯洛特规则 2 · 湖中仙女', s: { percival: true, morgana: true, mordred: false, oberon: false, cleric: false, troublemaker: false, lunatic: false, brute: false, revealer: false, trickster: false, good_sorcerer: false, evil_sorcerer: false, assassin: true, lancelot: 2, lady: true, excalibur: false }, art: ['good_lancelot', 'evil_lancelot', 'merlin', 'morgana'] },
-  { name: '混沌局', sub: '10 人 · 牧师 捣蛋鬼 疯子 诡术师 · 王者之剑', s: { percival: true, morgana: false, mordred: false, oberon: false, cleric: true, troublemaker: true, lunatic: true, brute: false, revealer: false, trickster: true, good_sorcerer: false, evil_sorcerer: false, assassin: true, lancelot: 0, lady: false, excalibur: true }, art: ['cleric', 'troublemaker', 'lunatic', 'trickster'] },
+  { name: '新手标准局', sub: '5–10 人 · 基础平衡 · 梅林 派西维尔 莫甘娜 刺客', min: 5, s: { ...PRESET_BASE, percival: true, morgana: true, assassin: true }, art: ['merlin', 'percival', 'morgana', 'assassin'] },
+  { name: '标准竞技局', sub: '7–10 人 · 经典竞技 · 加莫德雷德 · 湖中仙女', min: 7, s: { ...PRESET_BASE, percival: true, morgana: true, mordred: true, assassin: true, lady: true }, art: ['merlin', 'percival', 'mordred', 'items/lady'] },
+  { name: '十人四魔暗战', sub: '10 人 · 满编高对抗 · 牧师 莫德雷德 奥伯伦 · 仙女', min: 10, s: { ...PRESET_BASE, percival: true, cleric: true, morgana: true, mordred: true, oberon: true, assassin: true, lady: true }, art: ['cleric', 'mordred', 'oberon', 'morgana'] },
+  { name: '大盒信使阴谋局', sub: '7–10 人 · 大盒新机制 · 三信使 · 阴谋卡', min: 7, s: { ...PRESET_BASE, percival: true, morgana: true, assassin: true, messengers: true, plot: true }, art: ['senior_messenger', 'junior_messenger', 'evil_messenger', 'items/plot'] },
+  { name: '陷阱真假信息局', sub: '8–10 人 · 心理欺诈 · 不可信仆人 牧师 诡术 · 陷阱师', min: 8, s: { ...PRESET_BASE, percival: true, cleric: true, untrustworthy: true, morgana: true, trickster: true, assassin: true, trapper: true, lady: true }, art: ['untrustworthy', 'cleric', 'trickster', 'items/trapper'] },
+  { name: '大盒全员参与局', sub: '11–13 人 · 大桌稳健联动 · 牧师 巫师 信使 · 陷阱 阴谋', min: 11, s: { ...PRESET_BASE, percival: true, cleric: true, good_sorcerer: true, morgana: true, mordred: true, assassin: true, messengers: true, trapper: true, plot: true }, art: ['senior_messenger', 'good_sorcerer', 'items/trapper', 'items/plot'] },
+  { name: '双游侠乱战局', sub: '11–13 人 · 高刺激独胜 · 双游侠 仆人 捣蛋鬼 · 圣剑 仙女', min: 11, s: { ...PRESET_BASE, percival: true, troublemaker: true, untrustworthy: true, good_rogue: true, morgana: true, oberon: true, evil_rogue: true, assassin: true, excalibur: true, lady: true }, art: ['good_rogue', 'evil_rogue', 'untrustworthy', 'items/excalibur'] },
+  { name: '十三人五鬼终极局', sub: '13 人 · 满编全特职 · 双兰斯洛特2 信使 牧师 巫师 · 阴谋', min: 13, s: { ...PRESET_BASE, percival: true, cleric: true, good_sorcerer: true, untrustworthy: true, morgana: true, mordred: true, assassin: true, lancelot: 2, messengers: true, plot: true, lady: true }, art: ['good_lancelot', 'evil_lancelot', 'senior_messenger', 'untrustworthy'] },
 ];
 function presetsView(host) {
   const st = S.settings;
   const same = (s) => Object.keys(s).every((k) => (st[k] || 0) == (s[k] || 0));
   return `<div class="presets">${PRESETS.map((p, i) => `<div class="preset ${same(p.s) ? 'on' : ''} ${host ? 'can' : ''}" ${host ? `onclick="setS(PRESETS[${i}].s)"` : ''}>
-    <div class="pa">${p.art.map((a) => `<img src="${img(a)}" alt="" loading="lazy">`).join('')}</div><div class="pn"><b>${p.name}</b><small>${p.sub}</small></div>${same(p.s) ? `<span class="pon">${ic('check')}</span>` : ''}</div>`).join('')}</div>`;
+    <div class="pa">${p.art.map((a) => `<img src="${picSrc(a)}" alt="" loading="lazy">`).join('')}</div><div class="pn"><b>${p.name}</b><small>${p.sub}</small></div>${same(p.s) ? `<span class="pon">${ic('check')}</span>` : ''}</div>`).join('')}</div>`;
 }
 
 // ---------- 点任务火漆：这一轮的完整记录 ----------

@@ -347,6 +347,23 @@ async function playQuest(R, team, cardFn, opts = {}) {
     assert(tested.size >= 3, `阴谋卡核心效果至少实测覆盖 ${tested.size} 种（${[...tested].join(',')}）`);
   }
 
+  // ---------- 6. 大厅全部预设板子在对应最低人数下合法开局 ----------
+  {
+    const fs = require('fs'), vm = require('vm');
+    const src = fs.readFileSync(require('path').join(__dirname, '..', 'public', 'table.js'), 'utf8');
+    const m = src.match(/const PRESET_BASE = [\s\S]*?const PRESETS = \[[\s\S]*?\];/);
+    const box = {};
+    vm.runInNewContext(m[0] + '; this.PRESETS = PRESETS;', box);
+    assert(box.PRESETS.length === 8, `大厅共有 ${box.PRESETS.length} 套预设板子`);
+    for (const p of box.PRESETS) {
+      const n = p.min || 5;
+      const R = await room(n, p.s);
+      const err = R.cl[0].msgs.find((x) => x.t === 'error');
+      assert(!err && ['propose', 'plot_deal'].includes(R.S().phase), `预设「${p.name}」在 ${n} 人局一键开局成功`);
+      R.close();
+    }
+  }
+
   console.log(fails ? `\n${fails} 项失败` : '\n全部通过');
   process.exit(fails ? 1 : 0);
 })();
