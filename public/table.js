@@ -355,7 +355,7 @@ function actionBar() {
   } else if (S.phase === 'quest') {
     const inTeam = S.team.includes(S.me);
     const faceTag = S.plot && S.plot.faceup && S.plot.faceup.id === S.me ? '⚠️ 你被「找到你了！」锁定，本轮必须明牌出牌！' : '';
-    if (inTeam && !S.myCard) { hint = faceTag || cardHint(); main = `<div class="row">${S.myCards.map((c) => `<button class="${CARD[c].b}" onclick="qc('${c}')">${ic(c === 'S' || c === 'GS' || c === 'RS' ? 'grail' : c === 'M' ? 'magic' : 'dagger')}${CARD[c].t}</button>`).join('')}</div>`; }
+    if (inTeam && !S.myCard) { hint = faceTag || cardHint(); main = questHand(); }
     else hint = inTeam ? `你已出牌 · 等待其他队员 ${S.questDone.length}/${S.team.length}` : `等待队员出牌 ${S.questDone.length}/${S.team.length}`;
   } else if (S.phase === 'excalibur') {
     if (S.excalibur === S.me) {
@@ -459,7 +459,7 @@ function timeline() {
 function gameView() {
   let h = (linkFrom ? `<div class="linkbar" onclick="linkFrom=null;render()">已选 ${seat(linkFrom)}号 ${esc(P(linkFrom).name)}，点另一个人的头像建立关系（点这里取消）</div>` : '');
   h += roleCard() + questTrack();
-  h += roundTable(centerStage());
+  h += roundTable(centerStage()) + gameItems();
   if (S.spectators && S.spectators.length) h += `<div class="specs">${ic('eye')}观众席：${S.spectators.map(esc).join('、')}</div>`;
   h += actionBar();
   if (S.phase === 'end') h += timeline();

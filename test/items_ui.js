@@ -1,0 +1,28 @@
+const fs = require('fs'), vm = require('vm'), assert = require('assert/strict');
+const ctx = { window: {}, S: null, esc: s => String(s).replace(/[<>&"']/g, '_'), seat: id => id === 'a' ? 1 : 2 };
+vm.createContext(ctx); vm.runInContext(fs.readFileSync('public/roles.js','utf8'),ctx);
+Object.assign(ctx,ctx.window);
+vm.runInContext(fs.readFileSync('public/items-ui.js','utf8'),ctx);
+ctx.CARD = { S:{t:'成功',b:'good'}, F:{t:'失败',b:'evil'}, M:{t:'魔法',b:'sec'}, GS:{t:'好信件',b:'good'}, RF:{t:'游侠失败',b:'evil'} };
+const base = () => ({phase:'quest',me:'a',players:[{id:'a'},{id:'b'}],settings:{},myCards:['S','F','M'],team:['a'],teamSizes:[2],quest:0,leader:'b',hostId:'b',questDone:[]});
+ctx.S=base(); let h=ctx.questHand();
+for(const k of ['quest_success','quest_fail','quest_magic']) assert(h.includes(k+'.webp'));
+ctx.S.myCards=['S']; assert(!ctx.questHand().includes('quest_fail'));
+ctx.S.myCards=['GS','RF']; assert(ctx.questHand().includes('好信件') && ctx.questHand().includes('游侠失败'));
+for(const key of ['lady','excalibur','trapper']){ctx.S={...base(),phase:key}; assert(ctx.gameItems().includes(key+'.webp')); assert(ctx.gameItems(true).includes(key+'.webp'));}
+ctx.S={...base(),phase:'plot_deal',plot:{action:null,pending:[{type:'charge'}],hands:{a:[{type:'ambush'}],b:[{type:'king_returns'}]}}};
+assert(ctx.gameItems().includes('冲锋') && ctx.gameItems().includes('伏击'));
+assert(!ctx.gameItems().includes('国王归来')); assert(ctx.gameItems(true).includes('国王归来'));
+const publicBefore=ctx.gameItems(true); ctx.S.myRole={role:'merlin'};ctx.S.myChecks=[{id:'b',evil:true}];ctx.S.myTrapperSeen={card:'F'};
+assert.equal(ctx.gameItems(true),publicBefore);
+ctx.S={...base(),lancelot:{flips:[{card:'switch',swapped:true}]}};assert(ctx.gameItems().includes('loyalty.webp'));
+assert(ctx.loyaltyReveal({card:'switch'}).includes('换阵营'));assert(ctx.loyaltyReveal({card:'stay'}).includes('不换'));
+const table=fs.readFileSync('public/table.js','utf8');
+Object.assign(ctx,{sel:new Set(),speechButtons:()=>'',ic:()=>'',cardHint:()=>'',isGod:()=>false});
+vm.runInContext(table.slice(table.indexOf('function actionBar()'),table.indexOf('// ---------- 身份：')),ctx);
+ctx.S=base();assert(ctx.actionBar().includes('quest-choice'));
+ctx.S.myCard=true;assert(!ctx.actionBar().includes('quest-choice'));
+ctx.S={...base(),me:'b'};assert(!ctx.actionBar().includes('quest-choice'));
+assert(fs.readFileSync('public/app.js','utf8').includes('gameItems(true)'));
+assert(fs.readFileSync('public/items-ui.css','utf8').includes('prefers-reduced-motion'));
+console.log('PASS: eight item images, legal card choices, special labels, public-only display, no duplicate submission UI, reduced-motion fallback');

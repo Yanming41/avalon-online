@@ -689,15 +689,15 @@ function maybeEvent() {
     <div class="mute">第 ${e.quest + 1} 轮第 ${e.attempt} 次 · 队长 ${nm(e.leader)}</div><div class="mute" style="margin:6px 0">车上：${e.team.map(nm).join('、')}</div>
     <div class="vcol"><div><h4 style="color:var(--ok)">同意 ${yes.length}</h4>${yes.map((i) => `<div>${nm(i)}</div>`).join('')}</div><div><h4 style="color:var(--evil)">反对 ${no.length}</h4>${no.map((i) => `<div>${nm(i)}</div>`).join('')}</div></div>`;
   } else if (e.type === 'lancelot') {
-    h = `<h3 style="margin:0">⚜️ 兰斯洛特忠诚牌</h3><div class="cards"><div class="qc ${e.card === 'switch' ? 'f' : 's'}" style="width:110px;font-size:18px">${e.card === 'switch' ? '换阵营' : '不换'}</div></div>
+    h = `<h3 style="margin:0">⚜️ 兰斯洛特忠诚牌</h3>${loyaltyReveal(e)}
     <div class="center">${e.card === 'switch' ? '两个兰斯洛特交换阵营！' : '阵营不变'}<br><span class="mute">现在：正义兰斯洛特是${e.swapped ? '坏人' : '好人'}，邪恶兰斯洛特是${e.swapped ? '好人' : '坏人'}</span></div>`;
   } else if (e.type === 'lady') {
-    h = `<h3 style="margin:0">🧜‍♀️ 湖中仙女</h3><p>${nm(e.holder)} 查验了 ${nm(e.target)}。</p><div class="mute">结果只有查验的人知道，湖中仙女现在交给 ${nm(e.target)}。</div>`;
+    h = `${itemTile('lady', '湖中仙女', '查验结果只有持有人知道')}<h3 style="margin:0">🧜‍♀️ 湖中仙女</h3><p>${nm(e.holder)} 查验了 ${nm(e.target)}。</p><div class="mute">结果只有查验的人知道，湖中仙女现在交给 ${nm(e.target)}。</div>`;
   } else if (e.type === 'recruit') {
     h = `<h3 style="margin:0">⚖️ 招募阶段</h3><p>${e.hit ? '刺客猜中了不可信的仆人！他已转为坏人，并代替刺客执行刺杀！' : '刺客没有猜中不可信的仆人，仆人保持好人身份，刺客照常刺杀。'}</p>`;
   } else if (e.type === 'plotUse') {
     const pn = (window.PLOT_CARDS && PLOT_CARDS[e.card]?.name) || e.card;
-    h = `<h3 style="margin:0">🃏 阴谋卡 · ${esc(pn)}</h3><p>${nm(e.by)} 使用了「${esc(pn)}」${e.target ? `（目标：${nm(e.target)}）` : ''}。</p>`;
+    h = `${itemTile('plot', pn, PLOT_CARDS[e.card]?.desc)}<h3 style="margin:0">🃏 阴谋卡 · ${esc(pn)}</h3><p>${nm(e.by)} 使用了「${esc(pn)}」${e.target ? `（目标：${nm(e.target)}）` : ''}。</p>`;
   } else {
     const cards = Array(Math.max(1, e.team.length - (e.trapperExcluded ? 1 : 0))).fill('s');
     for (let i = 0; i < (e.rawFails ?? e.fails); i++) if (i < cards.length) cards[cards.length - 1 - i] = 'f';
@@ -715,7 +715,7 @@ function maybeEvent() {
     ].filter(Boolean).join(' · ');
     h = ex + `<h3 style="margin:0;color:${e.success ? 'var(--good)' : 'var(--evil)'}">第 ${e.quest + 1} 轮任务${e.success ? '成功 🔵' : '失败 🔴'}</h3>
     <div class="mute" style="margin:6px 0">队员：${e.team.map(nm).join('、')}</div>
-    <div class="cards">${cards.map((c, i) => `<div class="qc ${c === 'm' ? 's' : c}" style="animation-delay:${i * 0.25}s;${c === 'm' ? 'background:#7b4fd6' : ''}">${c === 's' ? '✓' : c === 'f' ? '✗' : '✨'}</div>`).join('')}</div>
+    <div class="cards">${cards.map((c, i) => `<div class="qc art-result" style="animation-delay:${i * 0.15}s">${itemPicture(c === 'm' ? 'quest_magic' : c === 'f' ? 'quest_fail' : 'quest_success')}<span>${c === 's' ? '成功' : c === 'f' ? '失败' : '魔法'}</span></div>`).join('')}</div>
     <div class="center">${e.fails} 张失败${e.magics ? ` · ${e.magics} 张魔法（${e.magics % 2 ? '结果被反转' : '互相抵消'}）` : ''}${extraLine ? '<br>' + extraLine : ''}${e.need === 2 ? '<br>本轮需要 2 张失败才算失败' : ''}</div>`;
   }
   vibrate(100);
@@ -758,7 +758,7 @@ function tvView() {
   let left = `<div class="tvtable">${roundTable(centerStage())}${typeof tvSpeechBar === 'function' ? tvSpeechBar() : ''}</div>`;
   let right = `<div class="banner" style="${bstyle}">${banner}</div>` + questTrack();
   if (S.phase === 'end') right += `<div class="card"><h3>身份揭晓</h3><div class="gallery" style="grid-template-columns:repeat(5,1fr)">${S.allRoles.map((r) => `<div class="gi ${r.evil ? 'e' : 'g'} ${S.assassinTarget === r.id ? 'dead' : ''}"><img class="portrait" src="${img(r.art)}" alt="" onerror="this.onerror=null;this.src='${img(r.role)}'"><div class="cap" style="font-size:15px">${seat(r.id)}号 ${nm(r.id)}<br><b style="color:${r.evil ? '#ff8a85' : '#9cc3ff'}">${r.name}</b></div></div>`).join('')}</div></div>`;
-  const side2 = infoCard() + voteMatrix();
+  const side2 = gameItems(true) + infoCard() + voteMatrix();
   return head + `<div class="tvgrid tvgame"><div class="tvside">${right}</div>${left}<div class="tvside">${side2}</div></div>`;
 }
 function lobbyRoleList() {
