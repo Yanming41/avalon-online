@@ -63,11 +63,12 @@ const lastErr = (c) => [...c.msgs].reverse().find((m) => m.t === 'error');
     assert(lastErr(bad) && lastErr(bad).m.includes('登录已过期'), '伪造 / 过期的登录凭证被拒绝');
 
     const g1 = await mk(); tx(g1, { t: 'join', code, name: 'Peter', token: 'dev-g1' }); await sleep(100);
-    assert(lastErr(g1) && lastErr(g1).m.includes('@peter.wu'), '游客不能用登录玩家的昵称顶替他的座位');
+    assert(lastErr(g1) && lastErr(g1).m.includes('请换个昵称') && !lastErr(g1).m.includes('peter.wu'), '游客不能冒用登录玩家昵称，错误消息不泄露用户名');
 
     const b = await mk(); tx(b, { t: 'join', code, name: 'zzz', token: 'dev-b', auth: 'tok-b' }); await sleep(100);
     const bp = b.s.players.find((p) => p.id === b.s.me);
     assert(bp.name === 'Mia' && bp.avatar === 'owl', '没上传头像时用资料里选的纹章');
+    assert(!b.s.players.find((p) => p.id === a.s.me).username && !a.s.players.find((p) => p.id === b.s.me).username, '双方只能看到自己的用户名');
 
     tx(b, { t: 'profile', avatar: 'https://evil.example.com/x.png' }); await sleep(80);
     assert(b.s.players.find((p) => p.id === b.s.me).avatar === 'owl', '不接受外站图片当头像');
@@ -98,7 +99,12 @@ const lastErr = (c) => [...c.msgs].reverse().find((m) => m.t === 'error');
     const byName = Object.fromEntries(rows.map((r) => [r.name, r]));
     assert(rows.length === 5 && byName.Peter.user_id === A && byName.Mia2.user_id === B && byName.Guest0.user_id === null, '每位玩家一行；游客 user_id 为空');
     assert(rows.every((r) => r.won === !r.evil), '胜负按阵营算对');
-    assert(posted.games[0].record.players.some((p) => p.username === 'peter.wu') && !JSON.stringify(posted.games[0].record).includes('dev-a'), '记录里有用户名，没有设备 token');
+    assert(posted.games[0].record.players.every((p) => !p.username) && !JSON.stringify(posted.games[0].record).includes('dev-a'), '结算记录不含用户名和设备 token');
+    Object.assign(process.env, { SUPABASE_URL: SB, SUPABASE_ANON_KEY: 'anon-key', SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_test' });
+    const accountStore = require('../accounts');
+    const solo = { ...posted.games[0].record, id: 'solo-test', soloWinner: 1 };
+    await accountStore.saveGame(solo, []);
+    assert(posted.game_players[1].every((p) => p.won === (p.seat === 1)), '游侠独胜时只有本人计入胜场');
   } finally {
     srv.kill(); mock.close();
     console.log(fails ? `\n${fails} 项失败` : '\n全部通过');

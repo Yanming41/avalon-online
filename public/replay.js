@@ -33,7 +33,7 @@ async function drawReplay(rec) {
   // 胜负横幅
   const win = rec.winner === 'good';
   rpRound(ctx, pad, 196, W - pad * 2, 82, 10); ctx.fillStyle = win ? 'rgba(74,124,196,.35)' : 'rgba(179,58,51,.38)'; ctx.fill(); ctx.strokeStyle = win ? RP.good : RP.evil; ctx.lineWidth = 2; ctx.stroke();
-  ctx.fillStyle = '#fff'; ctx.font = rpFont(40, 700); ctx.fillText(win ? '正义阵营获胜' : '邪恶阵营获胜', W / 2, 238);
+  ctx.fillStyle = '#fff'; ctx.font = rpFont(40, 700); ctx.fillText(rec.soloWinner ? '游侠独自获胜' : win ? '正义阵营获胜' : '邪恶阵营获胜', W / 2, 238);
   ctx.fillStyle = '#e8dcc0'; ctx.font = rpFont(24); ctx.fillText(rec.reason, W / 2, 268);
   // 身份牌
   let y = 310;
@@ -43,11 +43,12 @@ async function drawReplay(rec) {
     const x0 = (W - (rowCount * cardW + (rowCount - 1) * 14)) / 2 + c * (cardW + 14), y0 = y + r * (cardH + 70);
     ctx.save(); rpRound(ctx, x0, y0, cardW, cardH, 8); ctx.clip(); rpCover(ctx, ims[i], x0, y0, cardW, cardH); ctx.restore();
     rpRound(ctx, x0, y0, cardW, cardH, 8); ctx.lineWidth = 3; ctx.strokeStyle = p.evil ? RP.evil : RP.good; ctx.stroke();
-    if (rec.assassinTarget === p.seat) { ctx.lineWidth = 6; ctx.strokeStyle = '#ff3b30'; ctx.stroke(); }
+    const stabbed = rec.assassinTarget === p.seat || (rec.assassinTargets && rec.assassinTargets.includes(p.seat));
+    if (stabbed) { ctx.lineWidth = 6; ctx.strokeStyle = '#ff3b30'; ctx.stroke(); }
     ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.beginPath(); ctx.arc(x0 + 26, y0 + 26, 20, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = RP.gold; ctx.font = rpFont(24, 700); ctx.fillText(String(p.seat), x0 + 26, y0 + 34);
     ctx.fillStyle = RP.ink; ctx.font = rpFont(Math.min(28, cardW / 6), 700); ctx.fillText(p.name.slice(0, 8), x0 + cardW / 2, y0 + cardH + 32);
-    ctx.fillStyle = p.evil ? '#ff9a92' : '#a9c8ff'; ctx.font = rpFont(Math.min(24, cardW / 7)); ctx.fillText(p.roleName + (rec.assassinTarget === p.seat ? ' · 被刺' : ''), x0 + cardW / 2, y0 + cardH + 60);
+    ctx.fillStyle = p.evil ? '#ff9a92' : '#a9c8ff'; ctx.font = rpFont(Math.min(24, cardW / 7)); ctx.fillText(p.roleName + (stabbed ? ' · 被刺' : '') + (rec.soloWinner === p.seat ? ' · 独胜' : ''), x0 + cardW / 2, y0 + cardH + 60);
   });
   y += rosterRows * (cardH + 70) + 60;
   // 任务进度
@@ -115,7 +116,7 @@ function historyView() {
   const st = {};
   for (const g of gs) for (const p of g.players) {
     const s = st[p.name] || (st[p.name] = { name: p.name, n: 0, w: 0, good: 0, evil: 0, roles: {} });
-    s.n++; if ((g.winner === 'evil') === p.evil) s.w++;
+    s.n++; if (g.soloWinner ? p.seat === g.soloWinner : (g.winner === 'evil') === p.evil) s.w++;
     p.evil ? s.evil++ : s.good++; s.roles[p.roleName] = (s.roles[p.roleName] || 0) + 1;
   }
   const rows = Object.values(st).sort((a, b) => b.w / b.n - a.w / a.n || b.n - a.n);
@@ -125,7 +126,7 @@ function historyView() {
   <button class="sec" onclick="location.href='/'">返回首页</button>
   ${rows.length ? `<div class="card"><h3>玩家排行</h3><div class="mx"><table><tr><th>玩家</th><th>局数</th><th>胜率</th><th>好/坏</th><th>最常拿</th></tr>
     ${rows.map((s) => `<tr><td>${esc(s.name)}</td><td>${s.n}</td><td>${Math.round((s.w / s.n) * 100)}%</td><td>${s.good}/${s.evil}</td><td>${esc(fav(s)[0])}×${fav(s)[1]}</td></tr>`).join('')}</table></div></div>` : ''}
-  <div class="card"><h3>对局</h3>${gs.length ? gs.map((g) => `<div class="hist-g" onclick="openGame('${g.id}')"><b class="${g.winner}">${g.winner === 'good' ? '正义胜' : '邪恶胜'}</b><span>${fmt(g.endedAt)} · ${g.players.length} 人 · ${g.results.map((r) => (r.success ? '●' : '○')).join('')}</span><small>${g.players.map((p) => esc(p.name)).join('、')}</small></div>`).join('') : '<div class="mute">还没有对局记录</div>'}</div>`;
+  <div class="card"><h3>对局</h3>${gs.length ? gs.map((g) => `<div class="hist-g" onclick="openGame('${g.id}')"><b class="${g.winner}">${g.soloWinner ? '游侠独胜' : g.winner === 'good' ? '正义胜' : '邪恶胜'}</b><span>${fmt(g.endedAt)} · ${g.players.length} 人 · ${g.results.map((r) => (r.success ? '●' : '○')).join('')}</span><small>${g.players.map((p) => esc(p.name)).join('、')}</small></div>`).join('') : '<div class="mute">还没有对局记录</div>'}</div>`;
 }
 async function openGame(id) {
   try { const rec = await (await fetch('/api/games/' + id)).json(); showReplay(rec); } catch { toast('读取失败'); }

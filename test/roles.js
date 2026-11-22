@@ -2,6 +2,7 @@
 const WebSocket = require('ws');
 const URL = process.argv[2] || 'ws://localhost:3123';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function until(check) { const end = Date.now() + 5000; while (!check()) { if (Date.now() > end) throw new Error('Timed out waiting for client state'); await sleep(20); } }
 let fails = 0;
 const assert = (c, m) => { console.log(c ? 'ok  ' : 'FAIL', m); if (!c) fails++; };
 
@@ -24,8 +25,10 @@ async function room(n, settings) {
 async function playQuest(R, team, cardFn, opts = {}) {
   const { tx, S, by } = R;
   if (S().phase !== 'propose') throw new Error('not propose: ' + S().phase);
-  tx(by(S().leader), { t: 'propose', team, excalibur: opts.excalibur }); await sleep(80);
-  R.cl.forEach((c) => tx(c, { t: 'vote', approve: true })); await sleep(120);
+  tx(by(S().leader), { t: 'propose', team, excalibur: opts.excalibur });
+  await until(() => R.cl.every((c) => c.s.phase === 'vote'));
+  R.cl.forEach((c) => tx(c, { t: 'vote', approve: true }));
+  await until(() => R.cl.every((c) => c.s.phase === 'quest'));
   for (const id of team) { const c = by(id); tx(c, { t: 'quest', card: cardFn(id, c.s.myCards) }); }
   await sleep(150);
 }

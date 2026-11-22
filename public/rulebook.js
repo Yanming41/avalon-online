@@ -17,7 +17,12 @@ function openRulebook() {
   const modules = [];
   if (S.settings.lady) modules.push(['湖中仙女', ITEMS.lady.when]);
   if (S.settings.excalibur) modules.push(['王者之剑', ITEMS.excalibur.when]);
+  if (S.settings.trapper) modules.push(['陷阱师', ITEMS.trapper.when]);
+  if (S.settings.plot) modules.push(['阴谋卡', ITEMS.plot.when]);
   if (counts.good_sorcerer || counts.evil_sorcerer) modules.push(['巫师 · 魔法牌', ITEMS.quest_magic.when + ' 巫师（正义、邪恶可以单独出现）只能出成功或魔法；魔法牌每局限用 1 次，用过后只能出成功。']);
+  if (counts.junior_messenger || counts.senior_messenger || counts.evil_messenger) modules.push(['信使模块', '好信使（初/高）整局每人最多打 2 张「好信件」（等同成功），坏信使可打「坏信件」（等同失败）。第 5 轮结算时，好信件 ≥ 3 张移除 1 张失败，坏信件 ≥ 2 张加 1 张失败，同时满足抵消。刺杀时刺客可宣布改刺双好信使。']);
+  if (counts.good_rogue || counts.evil_rogue) modules.push(['游侠模块', '游侠在未获队长「监视标记」时可出专属游侠牌（5–6 人前两轮不用监视标记）。第 3 次成功/失败时打出游侠牌且之前也打过至少 1 次，则游侠立刻独自获胜（好游侠赢则跳过刺杀）。']);
+  if (counts.untrustworthy) modules.push(['不可信的仆人', '开局是好人且知道刺客，梅林眼中显示为坏人。3 次任务成功后先进入「招募阶段」，刺客猜中则其转邪恶并代为刺杀梅林，猜错保持好人。']);
   if (S.lancelot) modules.push(['兰斯洛特 · 规则 ' + S.lancelot.rule, {
     1: '5 张忠诚牌中有 2 张换阵营。从第 3 轮起，每次组队翻 1 张（队伍被否决后重新组队也翻），牌用完即止。翻到换阵营时，两位兰斯洛特一起换边。',
     2: '7 张忠诚牌中有 2 张换阵营，随机抽取 5 张；每轮任务开始组队时翻 1 张。同一轮重新组队不再翻。两位兰斯洛特按当前阵营行动。',

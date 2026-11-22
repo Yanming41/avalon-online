@@ -170,7 +170,7 @@ function accEditView(first) {
   const meta = (ACC.session && ACC.session.user.user_metadata) || {};
   accDraft = { file: null, preview: null, avatar_url: p.avatar_url || null, crest: p.crest || (p.avatar_url ? null : myAvatar), first: !!first };
   accUnameOk = p.username ? true : null;
-  const suggest = p.username || accSuggestName(meta.name || meta.full_name || (ACC.session && ACC.session.user.email) || '');
+  const suggest = p.username || accSuggestName(meta.name || meta.full_name || ''); // 不再用邮箱前缀当默认用户名
   accModal(`<div class="acc-head">${first ? '<div class="acc-seal">⚜</div><h3>起个名字吧</h3><div class="mute">用户名是唯一的，别人可以用它认出你；昵称是游戏里显示的名字，随时能改</div>' : '<h3>编辑资料</h3>'}</div>
     <div class="acc-avedit"><label class="acc-avbig" title="上传头像"><span id="acc-avprev">${avH(accDraftAvatar())}</span><span class="acc-cam">📷</span>
       <input type="file" accept="image/*" onchange="accPickFile(this.files[0])" hidden></label>

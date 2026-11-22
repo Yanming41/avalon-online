@@ -25,22 +25,25 @@ const teamFor = (room) => { const n = room.players.length, c = room.settings.tea
 const ROLE_NAME = {
   merlin: '梅林', percival: '派西维尔', servant: '亚瑟的忠臣', cleric: '牧师', troublemaker: '捣蛋鬼',
   good_sorcerer: '正义巫师', good_lancelot: '正义兰斯洛特',
+  untrustworthy: '不可信的仆人', junior_messenger: '初级信使', senior_messenger: '高级信使', good_rogue: '正义游侠',
   assassin: '刺客', morgana: '莫甘娜', mordred: '莫德雷德', oberon: '奥伯伦', minion: '莫德雷德的爪牙',
   lunatic: '疯子', brute: '莽夫', revealer: '暴露者', trickster: '诡术师', evil_sorcerer: '邪恶巫师', evil_lancelot: '邪恶兰斯洛特',
+  evil_messenger: '邪恶信使', evil_rogue: '邪恶游侠',
 };
-const EVIL_ROLES = new Set(['assassin', 'morgana', 'mordred', 'oberon', 'minion', 'lunatic', 'brute', 'revealer', 'trickster', 'evil_sorcerer', 'evil_lancelot']);
-// 大厅里可勾选的单个角色（阵营）；lancelot / sorcerer 是成对的
-const OPT_GOOD = ['percival', 'cleric', 'troublemaker', 'good_sorcerer'];
-const OPT_EVIL = ['assassin', 'morgana', 'mordred', 'oberon', 'lunatic', 'brute', 'revealer', 'trickster', 'evil_sorcerer'];
+const EVIL_ROLES = new Set(['assassin', 'morgana', 'mordred', 'oberon', 'minion', 'lunatic', 'brute', 'revealer', 'trickster', 'evil_sorcerer', 'evil_lancelot', 'evil_messenger', 'evil_rogue']);
+// 大厅里可勾选的单个角色（阵营）；lancelot / messengers 是成对/成组模块
+const OPT_GOOD = ['percival', 'cleric', 'troublemaker', 'good_sorcerer', 'untrustworthy', 'good_rogue'];
+const OPT_EVIL = ['assassin', 'morgana', 'mordred', 'oberon', 'lunatic', 'brute', 'revealer', 'trickster', 'evil_sorcerer', 'evil_rogue'];
 const AVATARS = ['lion', 'eagle', 'dragon', 'stag', 'wolf', 'bear', 'boar', 'griffin', 'unicorn', 'raven', 'owl', 'fox', 'horse', 'falcon', 'serpent', 'swan', 'tower', 'rose', 'sun', 'moon'];
 const OLD_AVATARS = ['🦁', '🐺', '🦊', '🐻', '🐼', '🐯', '🦉', '🦅', '🐉', '🦄', '🐸', '🐙', '🦈', '🐢', '🦌', '🐗', '🐰', '🐱', '🐶', '🐧'];
 const DEFAULT_SETTINGS = {
   percival: true, morgana: true, mordred: false, oberon: false, cleric: false, troublemaker: false,
   lunatic: false, brute: false, revealer: false, trickster: false, good_sorcerer: false, evil_sorcerer: false, assassin: true,
+  untrustworthy: false, good_rogue: false, evil_rogue: false, messengers: false,
   leaderMode: 'seq', // seq 按座位顺序 / random 每轮随机
   clericTiming: 'start', // start 开局查首任队长 / propose 首次发车后查发车的队长
   lancelot: 0, // 0 关闭，1/2/3 对应三套兰斯洛特规则
-  lady: false, excalibur: false, speechSecs: 90, assassinSecs: 120,
+  lady: false, excalibur: false, trapper: false, plot: false, speechSecs: 90, assassinSecs: 120,
 };
 
 const rooms = new Map();
@@ -77,12 +80,14 @@ function newCode() { let c; do { c = String(crypto.randomInt(1000, 10000)); } wh
 const isEvilRole = (r) => EVIL_ROLES.has(r);
 const pinOk = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 const isLancelot = (r) => r === 'good_lancelot' || r === 'evil_lancelot';
-// 当前阵营：兰斯洛特换阵营后会反过来
+// 当前阵营：兰斯洛特换阵营 / 不可信的仆人被招募后会改变
 function evilNow(room, pid) {
   const r = room.roles[pid]; const e = isEvilRole(r);
-  return room.game && room.game.lancelotSwapped && isLancelot(r) ? !e : e;
+  if (room.game && room.game.lancelotSwapped && isLancelot(r)) return !e;
+  if (r === 'untrustworthy' && room.game && room.game.recruited === pid) return true;
+  return e;
 }
-// 忠诚查验（湖中仙女 / 牧师）看到的结果：捣蛋鬼必须显示坏，诡术师可以自选
+// 忠诚查验（湖中仙女 / 牧师 / 阴谋卡）看到的结果：捣蛋鬼必须显示坏，诡术师可以自选
 function loyaltyShown(room, pid) {
   const r = room.roles[pid];
   if (r === 'troublemaker') return true;
@@ -90,10 +95,32 @@ function loyaltyShown(room, pid) {
   return evilNow(room, pid);
 }
 
+// 阴谋卡定义（大盒版 9 种共 15 张；5–6 人用 7 张，7+ 人用全部 15 张）
+const PLOT_META = {
+  are_you_the_one: { name: '你是那个人吗？', kind: 'imm' },
+  show_strength: { name: '展示你的力量', kind: 'imm' },
+  show_nature: { name: '展示你的本性', kind: 'imm' },
+  restore_honor: { name: '恢复你的荣誉', kind: 'imm' },
+  charge: { name: '冲锋！', kind: 'perm' },
+  king_returns: { name: '国王归来', kind: 'hold' },
+  ambush: { name: '伏击', kind: 'hold' },
+  lead_to_victory: { name: '引领胜利', kind: 'hold' },
+  we_found_you: { name: '找到你了！', kind: 'hold' },
+};
+function buildPlotDeck(n) {
+  const spec = n <= 6
+    ? [['are_you_the_one', 1], ['show_strength', 1], ['show_nature', 1], ['charge', 1], ['king_returns', 1], ['ambush', 1], ['lead_to_victory', 1]]
+    : [['are_you_the_one', 2], ['charge', 2], ['show_strength', 2], ['show_nature', 2], ['king_returns', 2], ['ambush', 2], ['lead_to_victory', 1], ['we_found_you', 1], ['restore_honor', 1]];
+  const deck = [];
+  for (const [k, cnt] of spec) for (let i = 0; i < cnt; i++) deck.push({ uid: crypto.randomUUID().slice(0, 8), type: k });
+  return shuffle(deck);
+}
+
 function buildRoles(n, s) {
   const evil = OPT_EVIL.filter((k) => s[k]);
   const good = ['merlin', ...OPT_GOOD.filter((k) => s[k])];
   if (s.lancelot) { evil.push('evil_lancelot'); good.push('good_lancelot'); }
+  if (s.messengers) { good.push('junior_messenger', 'senior_messenger'); evil.push('evil_messenger'); }
   const E = evilCount(n), G = n - E;
   if (evil.length > E) return { error: `${n} 人局只有 ${E} 个坏人，现在选了 ${evil.length} 个坏人角色` };
   if (good.length > G) return { error: `${n} 人局只有 ${G} 个好人，现在选了 ${good.length} 个好人角色` };
@@ -102,17 +129,19 @@ function buildRoles(n, s) {
   return { roles: shuffle([...good, ...evil]) };
 }
 
-// 开局"睁眼"信息，按初始身份算（之后兰斯洛特换阵营不影响开局看到的东西）
+// 开局"睁眼"信息，按初始身份算（之后兰斯洛特换阵营/招募不影响开局看到的东西）
 function knowledge(room, pid) {
   const me = room.roles[pid], g = room.game;
   const out = [];
-  const seenByEvil = (r) => isEvilRole(r) && r !== 'oberon';
+  const seenByEvil = (r) => isEvilRole(r) && r !== 'oberon' && r !== 'evil_rogue';
   for (const p of room.players) {
     if (p.id === pid) continue;
     const r = room.roles[p.id];
-    if (me === 'merlin' && isEvilRole(r) && r !== 'mordred') out.push({ id: p.id, tag: '坏人' });
+    if (me === 'merlin' && ((isEvilRole(r) && r !== 'mordred' && r !== 'evil_rogue') || r === 'untrustworthy')) out.push({ id: p.id, tag: '坏人' });
     else if (me === 'percival' && (r === 'merlin' || r === 'morgana')) out.push({ id: p.id, tag: '梅林？' });
     else if (g.lancelotRule === 3 && isLancelot(me) && isLancelot(r)) out.push({ id: p.id, tag: '另一个兰斯洛特' });
+    else if (me === 'senior_messenger' && r === 'junior_messenger') out.push({ id: p.id, tag: '初级信使' });
+    else if (me === 'untrustworthy' && (r === 'assassin' || (!room.players.some((x) => room.roles[x.id] === 'assassin') && p.id === g.recruitAssassinId))) out.push({ id: p.id, tag: '刺客' });
     else if (seenByEvil(me) && me !== 'evil_lancelot' && seenByEvil(r)) out.push({ id: p.id, tag: r === 'evil_lancelot' ? '邪恶兰斯洛特' : '同伙' });
   }
   if (me === 'cleric' && g.clericSaw) out.push({ id: g.clericSaw.id, tag: `${g.clericSaw.when === 'propose' ? '首次发车的队长' : '首任队长'}·${g.clericSaw.evil ? '坏人' : '好人'}` });
@@ -120,9 +149,16 @@ function knowledge(room, pid) {
 }
 
 // 这个人这轮能出哪些任务牌
+// 昵称里不允许出现邮箱（防止把邮箱当昵称、被别的玩家看到）
+const EMAIL_RE = /[^\s@]+@[^\s@]+/;
+const noEmail = (s) => String(s || '').replace(new RegExp(EMAIL_RE, 'g'), '').trim();
 function allowedCards(room, pid) {
-  const r = room.roles[pid], q = room.game.quest;
-  if (r === 'good_sorcerer' || r === 'evil_sorcerer') return (room.game.magicUsed || {})[pid] ? ['S'] : ['S', 'M']; // 魔法牌每局限用 1 次
+  const g = room.game, r = room.roles[pid], q = g.quest;
+  if (r === 'good_sorcerer' || r === 'evil_sorcerer') return (g.magicUsed || {})[pid] ? ['S'] : ['S', 'M']; // 魔法牌每局限用 1 次
+  if (r === 'junior_messenger' || r === 'senior_messenger') return ((g.msgUsed || {})[pid] || 0) < 2 ? ['S', 'GS'] : ['S'];
+  if (r === 'evil_messenger') return ['S', 'F', 'EF'];
+  if (r === 'good_rogue') return g.watchTarget === pid ? ['S'] : ['S', 'RS'];
+  if (r === 'evil_rogue') return g.watchTarget === pid ? ['S', 'F'] : ['S', 'F', 'RF'];
   if (!evilNow(room, pid)) return ['S'];
   if (r === 'lunatic') return ['F'];
   if (r === 'brute') return q <= 2 ? ['S', 'F'] : ['S'];
@@ -132,17 +168,19 @@ function allowedCards(room, pid) {
 // ---------- 状态下发 ----------
 function viewFor(room, pid, god) {
   const g = room.game;
+  const baseSizes = (g && g.teamSizes) || teamFor(room);
   const v = {
     code: room.code, hostId: room.hostId, me: pid, god: !!god, now: Date.now(), settings: room.settings, defaultTeam: defaultTeam(room.players.length), evilTotal: evilCount(room.players.length),
-    players: room.players.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, online: !!p.ws, ...(p.username ? { username: p.username } : {}) })),
+    players: room.players.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, online: !!p.ws, ...(p.username && p.id === pid ? { username: p.username } : {}) })), // 账号用户名只给本人看
     phase: g ? g.phase : 'lobby', godEnabled: !!GOD_PASSWORD,
     spectators: [...room.watchers].filter((w) => w._wname && w.readyState === 1).map((w) => w._wname),
   };
   const me = room.players.find((p) => p.id === pid);
   if (!g) return v;
   const n = room.players.length;
+  const trapExtra = room.settings.trapper ? 1 : 0;
   Object.assign(v, {
-    teamSizes: g.teamSizes || teamFor(room), twoFailQuest4: n >= 7, evilTotal: evilCount(n),
+    teamSizes: baseSizes.map((sz) => Math.min(n, sz + trapExtra)), twoFailQuest4: n >= 7, evilTotal: evilCount(n),
     leader: room.players[g.leaderIdx].id, quest: g.quest, results: g.results,
     gameId: g.id, bellSeq: g.bellSeq || 0, rejects: g.rejects, team: g.team, history: g.history, speech: g.speech, lastEvent: g.lastEvent,
     voted: Object.keys(g.votes), questDone: Object.keys(g.questCards),
@@ -152,6 +190,21 @@ function viewFor(room, pid, god) {
     roleCounts: Object.fromEntries([...new Set(Object.values(room.roles))].sort().map((r) => [r, Object.values(room.roles).filter((x) => x === r).length])),
     lady: room.settings.lady ? { holder: g.ladyHolder, used: g.ladyUsed, log: g.ladyLog } : null,
     lancelot: g.lancelotRule ? { rule: g.lancelotRule, swapped: g.lancelotSwapped, flips: g.lancelotFlips, left: g.lancelotDeck.length } : null,
+    messengers: room.settings.messengers ? { good: g.msgGoodTotal || 0, evil: g.msgEvilTotal || 0 } : null,
+    rogue: (room.roles && Object.values(room.roles).some((r) => r === 'good_rogue' || r === 'evil_rogue')) ? { good: (g.rogueGoodQuests || []).length, evil: (g.rogueEvilQuests || []).length, watchTarget: g.watchTarget || null, watchUsed: n >= 7 || g.quest >= 2 } : null,
+    trapper: room.settings.trapper ? { discarded: g.trapperDiscarded || null } : null,
+    plot: room.settings.plot ? {
+      hands: g.plotHands || {},
+      pending: g.plotPending || [],
+      action: g.plotAction || null,
+      deckLeft: (g.plotDeck || []).length,
+      waitHolders: g.plotWaitHolders || [],
+      leadStolen: !!g.leadStolenThisVote,
+      faceup: g.faceupPlayer ? { id: g.faceupPlayer, card: g.faceupCard || null } : null,
+      ambushed: g.ambushedThisQuest || [],
+      chargeVotes: g.chargeHolders && g.phase === 'vote' ? Object.fromEntries(g.chargeHolders.filter((id) => g.votes[id] !== undefined).map((id) => [id, g.votes[id]])) : null,
+      chargeWait: g.chargeHolders && g.phase === 'vote' ? g.chargeHolders.filter((id) => g.votes[id] === undefined) : null,
+    } : null,
   });
   const role = room.roles[pid];
   if (role) {
@@ -159,12 +212,16 @@ function viewFor(room, pid, god) {
     if (role === 'trickster') v.myRole.trickShowEvil = !!g.trickShowEvil[pid];
     v.myChecks = g.ladyResults[pid] || [];
     if (g.excalSeen[pid]) v.myExcalSeen = g.excalSeen[pid];
+    if (g.trapperSeen && g.trapperSeen[pid]) v.myTrapperSeen = g.trapperSeen[pid];
+    if (g.plotChecks && g.plotChecks[pid]) v.myPlotChecks = g.plotChecks[pid];
   }
   if (g.phase === 'vote' && g.votes[pid] !== undefined) v.myVote = g.votes[pid];
   if (g.phase === 'quest' && g.team.includes(pid)) { v.myCards = allowedCards(room, pid); if (g.questCards[pid] !== undefined) v.myCard = true; }
-  if (g.phase === 'assassin' || g.phase === 'end') v.assassinRandom = !!g.assassinRandom;
+  if (g.phase === 'recruit') v.recruit = { recruiter: g.recruitId };
+  if (g.phase === 'assassin' || g.phase === 'end') { v.assassinRandom = !!g.assassinRandom; v.recruited = g.recruited || null; }
   if (g.phase === 'assassin') {
     v.assassin = g.assassinId; v.assassinEndsAt = g.assassinEndsAt || null; v.assassinSecs = g.assassinSecs || 0;
+    v.canKillMessengers = !!room.settings.messengers;
     // 刺杀环节：当前坏人阵营全部亮明身份，一起商量刺谁
     if ((role && evilNow(room, pid)) || god) {
       v.evilTeam = room.players.filter((p) => evilNow(room, p.id)).map((p) => p.id);
@@ -172,7 +229,7 @@ function viewFor(room, pid, god) {
     }
   }
   if (g.phase === 'end' || god) v.allRoles = room.players.map((p) => ({ id: p.id, role: room.roles[p.id], art: g.art[p.id] || room.roles[p.id], name: ROLE_NAME[room.roles[p.id]], evil: evilNow(room, p.id) }));
-  if (g.phase === 'end') Object.assign(v, { winner: g.winner, reason: g.reason, assassinTarget: g.assassinTarget, record: g.record });
+  if (g.phase === 'end') Object.assign(v, { winner: g.winner, reason: g.reason, assassinTarget: g.assassinTarget, assassinTargets: g.assassinTargets || null, soloWinner: g.soloWinner || null, record: records.publicRecord(g.record) });
   if (god) { v.liveVotes = g.votes; v.liveCards = g.questCards; v.leaderIdx = g.leaderIdx; v.lancelotDeck = g.lancelotDeck; }
   return v;
 }
@@ -267,8 +324,15 @@ function startGame(room) {
     history: [], speech: null, evilSuggest: {}, seq: 0, revealed: [], trickShowEvil: {},
     excalibur: null, excalSeen: {}, ladyResults: {}, ladyLog: [], ladyUsed: [], ladyHolder: null,
     lancelotRule: s.lancelot || 0, lancelotSwapped: false, lancelotFlips: [], lancelotDeck: [],
+    msgUsed: {}, msgGoodTotal: 0, msgEvilTotal: 0,
+    rogueGoodQuests: [], rogueEvilQuests: [], watchTarget: null,
+    trapperSeen: {}, trapperDiscarded: null,
+    plotDeck: s.plot ? buildPlotDeck(n) : [], plotHands: {}, plotPending: [], plotAction: null, plotChecks: {}, plotWaitHolders: [], leadStolenThisVote: false, faceupPlayer: null, faceupCard: null, ambushedThisQuest: [],
     rolesInGame: [...new Set(r.roles)], art: {},
   };
+  const ass = room.players.find((p) => room.roles[p.id] === 'assassin');
+  const evils0 = room.players.filter((p) => isEvilRole(room.roles[p.id]));
+  g.recruitAssassinId = ass ? ass.id : (evils0[0] && evils0[0].id) || null;
   const arts = shuffle(['servant', 'servant_2', 'servant_3', 'servant_4', 'servant_5', 'servant_6']);
   room.players.filter((p) => room.roles[p.id] === 'servant').forEach((p, i) => { g.art[p.id] = arts[i % arts.length]; });
   if (s.lady) { g.ladyHolder = room.players[(leaderIdx - 1 + n) % n].id; g.ladyUsed = [g.ladyHolder]; } // 首任队长右手边（上家）
@@ -284,22 +348,28 @@ function nextLeader(room) {
   if (room.settings.leaderMode === 'random') { let i; do { i = crypto.randomInt(n); } while (n > 1 && i === g.leaderIdx); g.leaderIdx = i; }
   else g.leaderIdx = (g.leaderIdx + 1) % n;
 }
-function endGame(room, winner, reason) {
-  clearSpeech(room); Object.assign(room.game, { phase: 'end', winner, reason });
+function endGame(room, winner, reason, extra = {}) {
+  clearSpeech(room); Object.assign(room.game, { phase: 'end', winner, reason, ...extra });
   const g = room.game; if (g.saved) return; g.saved = true;
   // 生成战绩记录（用座位号和昵称，不存 token 等隐私）
   const seatOf = (id) => room.players.findIndex((p) => p.id === id) + 1;
   const mapVotes = (v) => Object.fromEntries(Object.entries(v).map(([k, x]) => [seatOf(k), x]));
   g.record = {
     id: g.id, code: room.code, endedAt: Date.now(), winner, reason,
-    players: room.players.map((p, i) => ({ seat: i + 1, name: p.name, avatar: p.avatar, ...(p.username ? { username: p.username } : {}), role: room.roles[p.id], roleName: ROLE_NAME[room.roles[p.id]], art: g.art[p.id] || room.roles[p.id], evil: evilNow(room, p.id) })),
+    players: room.players.map((p, i) => ({ seat: i + 1, name: p.name, avatar: p.avatar, role: room.roles[p.id], roleName: ROLE_NAME[room.roles[p.id]], art: g.art[p.id] || room.roles[p.id], evil: evilNow(room, p.id) })),
     results: g.results, teamSizes: g.teamSizes || teamFor(room),
     assassin: g.assassinId ? seatOf(g.assassinId) : null, assassinTarget: g.assassinTarget ? seatOf(g.assassinTarget) : null,
+    assassinTargets: g.assassinTargets ? g.assassinTargets.map(seatOf) : null,
+    soloWinner: g.soloWinner ? seatOf(g.soloWinner) : null,
     settings: { ...room.settings },
     history: g.history.map((h) => {
       if (h.type === 'vote') return { ...h, leader: seatOf(h.leader), team: h.team.map(seatOf), votes: mapVotes(h.votes), excalibur: h.excalibur ? seatOf(h.excalibur) : null };
-      if (h.type === 'quest') return { ...h, team: h.team.map(seatOf), excal: h.excal ? { holder: seatOf(h.excal.holder), target: h.excal.target ? seatOf(h.excal.target) : null } : null };
+      if (h.type === 'quest') return { ...h, team: h.team.map(seatOf), watchTarget: h.watchTarget ? seatOf(h.watchTarget) : null, trapperExcluded: h.trapperExcluded ? seatOf(h.trapperExcluded) : null, faceup: h.faceup ? { seat: seatOf(h.faceup.id), card: h.faceup.card } : null, excal: h.excal ? { holder: seatOf(h.excal.holder), target: h.excal.target ? seatOf(h.excal.target) : null } : null };
       if (h.type === 'lady') return { ...h, holder: seatOf(h.holder), target: seatOf(h.target) };
+      if (h.type === 'watch') return { ...h, leader: seatOf(h.leader), target: seatOf(h.target) };
+      if (h.type === 'plot') return { ...h, from: seatOf(h.from), to: seatOf(h.to) };
+      if (h.type === 'plotUse') return { ...h, by: seatOf(h.by), target: h.target ? seatOf(h.target) : null };
+      if (h.type === 'recruit') return { ...h, target: h.target ? seatOf(h.target) : null };
       return h;
     }),
   };
@@ -308,16 +378,53 @@ function endGame(room, winner, reason) {
 }
 function event(room, e) { room.game.lastEvent = { ...e, seq: ++room.game.seq }; } // 客户端据此弹出票型/任务结果
 
-// 进入组队阶段：兰斯洛特规则 1 从第 3 轮起每次组队翻牌，规则 2 每轮开始翻牌
-function enterPropose(room, newQuest) {
+function hasPlotHolders(room, kind) {
   const g = room.game;
-  g.phase = 'propose'; g.team = []; g.votes = {}; g.excalibur = null;
+  if (!room.settings.plot || !g.plotHands) return [];
+  const n = room.players.length, out = [];
+  for (let i = 0; i < n; i++) {
+    const p = room.players[(g.leaderIdx + i) % n];
+    if ((g.plotHands[p.id] || []).some((c) => c.type === kind)) out.push(p.id);
+  }
+  return out;
+}
+function nextAfterVotePass(room) {
+  const g = room.game, n = room.players.length;
+  g.rejects = 0; g.questCards = {}; g.watchTarget = null; g.faceupPlayer = null; g.faceupCard = null; g.ambushedThisQuest = []; g.trapperDiscarded = null;
+  const hasRogue = Object.values(room.roles).some((r) => r === 'good_rogue' || r === 'evil_rogue');
+  if (hasRogue && (n >= 7 || g.quest >= 2)) { g.phase = 'watch'; return; }
+  enterPreQuestOrQuest(room);
+}
+function enterPreQuestOrQuest(room) {
+  const g = room.game;
+  const wh = hasPlotHolders(room, 'we_found_you');
+  if (wh.length) { g.plotWaitHolders = wh; g.phase = 'plot_prequest'; return; }
+  g.phase = 'quest';
+}
+function nextAfterQuestCards(room) {
+  const g = room.game;
+  const ah = hasPlotHolders(room, 'ambush');
+  if (ah.length) { g.plotWaitHolders = ah; g.phase = 'plot_ambush'; return; }
+  if (room.settings.trapper) { g.phase = 'trapper'; return; }
+  finishQuest(room, g._pendingExcal || null);
+}
+
+// 进入组队阶段：兰斯洛特规则 1/2 翻牌，以及阴谋卡每轮摸牌
+function enterPropose(room, newQuest) {
+  const g = room.game, n = room.players.length;
+  g.phase = 'propose'; g.team = []; g.votes = {}; g.excalibur = null; g._pendingExcal = null;
   const flip = (g.lancelotRule === 1 && g.quest >= 2) || (g.lancelotRule === 2 && newQuest);
   if (flip && g.lancelotDeck.length) {
     const card = g.lancelotDeck.shift();
     if (card === 'switch') g.lancelotSwapped = !g.lancelotSwapped;
     const rec = { type: 'lancelot', quest: g.quest, card, swapped: g.lancelotSwapped };
     g.lancelotFlips.push(rec); g.history.push(rec); event(room, rec);
+  }
+  if (newQuest && room.settings.plot && g.plotDeck && g.plotDeck.length) {
+    const cnt = Math.min(g.plotDeck.length, n <= 6 ? 1 : n <= 8 ? 2 : 3);
+    g.plotPending = g.plotDeck.splice(0, cnt);
+    g.plotAction = null;
+    if (g.plotPending.length) g.phase = 'plot_deal';
   }
 }
 
@@ -361,7 +468,8 @@ function handle(room, pid, msg, ws) {
       handleSpeech(room, msg, pid, pid === leaderId || isHost); break;
     case 'propose': {
       if (!g || g.phase !== 'propose' || leaderId !== pid) return;
-      const size = (g.teamSizes || teamFor(room))[g.quest];
+      const baseSize = (g.teamSizes || teamFor(room))[g.quest];
+      const size = Math.min(room.players.length, baseSize + (room.settings.trapper ? 1 : 0));
       const team = [...new Set(msg.team)].filter((id) => room.players.some((p) => p.id === id));
       if (team.length !== size) return err(ws, `本轮需要选 ${size} 人`);
       if (room.settings.excalibur) {
@@ -369,6 +477,7 @@ function handle(room, pid, msg, ws) {
         g.excalibur = msg.excalibur;
       }
       g.team = team; g.votes = {}; g.phase = 'vote';
+      g.chargeHolders = room.settings.plot ? room.players.filter((p) => ((g.plotHands || {})[p.id] || []).some((c) => c.type === 'charge')).map((p) => p.id) : [];
       if (room.settings.clericTiming === 'propose' && !g.clericDone) { // 第一次发车后，牧师查这位发车的队长
         g.clericDone = true;
         const cl = room.players.find((p) => room.roles[p.id] === 'cleric');
@@ -378,12 +487,24 @@ function handle(room, pid, msg, ws) {
     }
     case 'unpropose': // 队长投票前反悔重选
       if (!g || g.phase !== 'vote' || leaderId !== pid || Object.keys(g.votes).length) return;
-      g.phase = 'propose'; g.excalibur = null; break;
+      g.phase = 'propose'; g.excalibur = null; g.chargeHolders = []; break;
     case 'vote': {
       if (!g || g.phase !== 'vote') return;
+      const ch = g.chargeHolders || [];
+      if (ch.length && !ch.includes(pid) && ch.some((id) => g.votes[id] === undefined)) {
+        return err(ws, '等待持有「冲锋！」的玩家先亮出投票');
+      }
       g.votes[pid] = !!msg.approve;
       if (Object.keys(g.votes).length < room.players.length) break;
       finishVote(room); break;
+    }
+    case 'rogueWatch': { // 游侠监视标记：队长交给本轮任务的一名队员
+      if (!g || g.phase !== 'watch' || leaderId !== pid) return;
+      if (!g.team.includes(msg.id)) return err(ws, '只能交给车上的队员');
+      g.watchTarget = msg.id;
+      g.history.push({ type: 'watch', quest: g.quest, leader: pid, target: msg.id });
+      enterPreQuestOrQuest(room);
+      break;
     }
     case 'quest': {
       if (!g || g.phase !== 'quest' || !g.team.includes(pid) || g.questCards[pid] !== undefined) return;
@@ -391,21 +512,151 @@ function handle(room, pid, msg, ws) {
       if (!allowedCards(room, pid).includes(card)) return err(ws, '你不能出这张牌');
       g.questCards[pid] = card;
       if (card === 'M') (g.magicUsed = g.magicUsed || {})[pid] = true;
+      if (card === 'GS') (g.msgUsed = g.msgUsed || {})[pid] = ((g.msgUsed || {})[pid] || 0) + 1;
+      if (g.faceupPlayer === pid) g.faceupCard = card;
       if (Object.keys(g.questCards).length < g.team.length) break;
       if (g.excalibur) { g.phase = 'excalibur'; break; }
-      finishQuest(room); break;
+      nextAfterQuestCards(room); break;
     }
     case 'excalibur': { // 王者之剑：翻转一名其他队员的牌，或者不用
       if (!g || g.phase !== 'excalibur' || g.excalibur !== pid) return;
       let used = null;
       if (msg.id) {
         if (msg.id === pid || !g.team.includes(msg.id)) return err(ws, '只能选车上的其他队员');
+        if (g.faceupPlayer === msg.id) return err(ws, '「找到你了！」明牌出牌的目标不能被王者之剑翻转');
         const before = g.questCards[msg.id];
         g.excalSeen[pid] = { id: msg.id, card: before, quest: g.quest };
         if (before === 'S') g.questCards[msg.id] = 'F'; else if (before === 'F') g.questCards[msg.id] = 'S';
         used = msg.id;
       }
-      finishQuest(room, { holder: pid, target: used }); break;
+      g._pendingExcal = { holder: pid, target: used };
+      nextAfterQuestCards(room); break;
+    }
+    case 'trapper': { // 陷阱师：队长偷看一张牌并弃掉，不计入本轮任务结果
+      if (!g || g.phase !== 'trapper' || leaderId !== pid) return;
+      if (!g.team.includes(msg.id)) return err(ws, '只能选车上的一名队员');
+      g.trapperDiscarded = msg.id;
+      g.trapperSeen[pid] = { id: msg.id, card: g.questCards[msg.id], quest: g.quest };
+      finishQuest(room, g._pendingExcal || null);
+      break;
+    }
+    case 'plotGive': { // 阴谋卡：队长把刚摸到的卡分给另一名玩家
+      if (!g || g.phase !== 'plot_deal' || leaderId !== pid || g.plotAction || !g.plotPending.length) return;
+      const to = room.players.find((p) => p.id === msg.to);
+      if (!to || to.id === pid) return err(ws, '阴谋卡必须分给其他玩家（不能给自己）');
+      const card = g.plotPending.shift();
+      const meta = PLOT_META[card.type];
+      if (meta.kind !== 'imm') {
+        (g.plotHands[to.id] = g.plotHands[to.id] || []).push(card);
+        g.history.push({ type: 'plot', quest: g.quest, card: card.type, from: pid, to: to.id });
+        if (!g.plotPending.length) g.phase = 'propose';
+      } else if (card.type === 'show_strength') {
+        g.history.push({ type: 'plot', quest: g.quest, card: card.type, from: pid, to: to.id });
+        (g.plotChecks[to.id] = g.plotChecks[to.id] || []).push({ id: pid, evil: loyaltyShown(room, pid), quest: g.quest, card: meta.name });
+        if (!g.plotPending.length) g.phase = 'propose';
+      } else if (card.type === 'restore_honor') {
+        const hasAny = room.players.some((p) => p.id !== to.id && (g.plotHands[p.id] || []).length);
+        g.history.push({ type: 'plot', quest: g.quest, card: card.type, from: pid, to: to.id });
+        if (hasAny) g.plotAction = { ...card, owner: to.id };
+        else if (!g.plotPending.length) g.phase = 'propose';
+      } else {
+        g.history.push({ type: 'plot', quest: g.quest, card: card.type, from: pid, to: to.id });
+        g.plotAction = { ...card, owner: to.id };
+      }
+      break;
+    }
+    case 'plotResolve': { // 立即生效类阴谋卡选目标
+      if (!g || g.phase !== 'plot_deal' || !g.plotAction || g.plotAction.owner !== pid) return;
+      const act = g.plotAction, meta = PLOT_META[act.type];
+      if (act.type === 'are_you_the_one') {
+        const myIdx = room.players.findIndex((p) => p.id === pid), n = room.players.length;
+        const left = room.players[(myIdx - 1 + n) % n].id, right = room.players[(myIdx + 1) % n].id;
+        if (msg.id !== left && msg.id !== right) return err(ws, '只能查相邻左右两位玩家');
+        (g.plotChecks[pid] = g.plotChecks[pid] || []).push({ id: msg.id, evil: loyaltyShown(room, msg.id), quest: g.quest, card: meta.name });
+      } else if (act.type === 'show_nature') {
+        const t = room.players.find((p) => p.id === msg.id);
+        if (!t || t.id === pid) return err(ws, '请选另一名玩家查看你的阵营');
+        (g.plotChecks[t.id] = g.plotChecks[t.id] || []).push({ id: pid, evil: loyaltyShown(room, pid), quest: g.quest, card: meta.name });
+      } else if (act.type === 'restore_honor') {
+        const t = room.players.find((p) => p.id === msg.id);
+        const hand = t && t.id !== pid ? (g.plotHands[t.id] || []) : [];
+        const idx = msg.uid ? hand.findIndex((c) => c.uid === msg.uid) : 0;
+        if (!t || idx < 0) return err(ws, '请选一位持有阴谋卡的其他玩家');
+        const [stolen] = hand.splice(idx, 1);
+        (g.plotHands[pid] = g.plotHands[pid] || []).push(stolen);
+      }
+      g.plotAction = null;
+      if (!g.plotPending.length) g.phase = 'propose';
+      break;
+    }
+    case 'plotUse': { // 持有待用类阴谋卡：lead_to_victory / king_returns / we_found_you / ambush
+      if (!g || !room.settings.plot) return;
+      const hand = (g.plotHands && g.plotHands[pid]) || [];
+      const idx = hand.findIndex((c) => c.type === msg.card);
+      if (idx < 0 && !msg.pass) return;
+      if (msg.card === 'lead_to_victory') {
+        if (!['plot_deal', 'propose'].includes(g.phase) || leaderId === pid || g.leadStolenThisVote) return err(ws, '现在不能使用「引领胜利」');
+        if (g.phase === 'plot_deal' && g.plotAction) return err(ws, '请先等当前立即阴谋卡结算完');
+        hand.splice(idx, 1);
+        g.leaderIdx = room.players.findIndex((p) => p.id === pid);
+        g.leadStolenThisVote = true; g.excalibur = null;
+        g.history.push({ type: 'plotUse', quest: g.quest, card: 'lead_to_victory', by: pid });
+        event(room, { type: 'plotUse', card: 'lead_to_victory', by: pid });
+      } else if (msg.card === 'king_returns' && g.phase === 'plot_vote') {
+        if (msg.pass) {
+          g.plotWaitHolders = (g.plotWaitHolders || []).filter((id) => id !== pid);
+          if (!g.plotWaitHolders.length) nextAfterVotePass(room);
+          break;
+        }
+        hand.splice(idx, 1);
+        g.history.push({ type: 'plotUse', quest: g.quest, card: 'king_returns', by: pid });
+        event(room, { type: 'plotUse', card: 'king_returns', by: pid });
+        g.rejects++;
+        if (g.rejects >= 5) return endGame(room, 'evil', '连续 5 次组队被否决，坏人获胜');
+        nextLeader(room); enterPropose(room, false);
+      } else if (msg.card === 'we_found_you' && g.phase === 'plot_prequest') {
+        if (msg.pass) {
+          g.plotWaitHolders = (g.plotWaitHolders || []).filter((id) => id !== pid);
+          if (!g.plotWaitHolders.length) g.phase = 'quest';
+          break;
+        }
+        if (!g.team.includes(msg.id)) return err(ws, '请选车上的一名队员');
+        hand.splice(idx, 1);
+        g.faceupPlayer = msg.id;
+        g.history.push({ type: 'plotUse', quest: g.quest, card: 'we_found_you', by: pid, target: msg.id });
+        event(room, { type: 'plotUse', card: 'we_found_you', by: pid, target: msg.id });
+        g.phase = 'quest';
+      } else if (msg.card === 'ambush' && g.phase === 'plot_ambush') {
+        if (msg.pass) {
+          g.plotWaitHolders = (g.plotWaitHolders || []).filter((id) => id !== pid);
+          if (!g.plotWaitHolders.length) {
+            if (room.settings.trapper) g.phase = 'trapper'; else finishQuest(room, g._pendingExcal || null);
+          }
+          break;
+        }
+        if (!g.team.includes(msg.id) || (g.ambushedThisQuest || []).includes(msg.id)) return err(ws, '请选另一名本轮未被伏击过的队员');
+        hand.splice(idx, 1);
+        (g.ambushedThisQuest = g.ambushedThisQuest || []).push(msg.id);
+        (g.plotChecks[pid] = g.plotChecks[pid] || []).push({ id: msg.id, questCard: g.questCards[msg.id], quest: g.quest, card: '伏击' });
+        g.history.push({ type: 'plotUse', quest: g.quest, card: 'ambush', by: pid, target: msg.id });
+        g.plotWaitHolders = (g.plotWaitHolders || []).filter((id) => id !== pid || hand.some((c) => c.type === 'ambush'));
+        if (!g.plotWaitHolders.length) {
+          if (room.settings.trapper) g.phase = 'trapper'; else finishQuest(room, g._pendingExcal || null);
+        }
+      }
+      break;
+    }
+    case 'recruit': { // 不可信的仆人招募阶段：刺客猜一次谁是不可信的仆人
+      if (!g || g.phase !== 'recruit' || g.recruitId !== pid) return;
+      const target = room.players.find((p) => p.id === msg.id);
+      if (!target || evilNow(room, target.id)) return err(ws, '请选一个非坏人玩家尝试招募');
+      const ut = room.players.find((p) => room.roles[p.id] === 'untrustworthy');
+      const hit = !!(ut && ut.id === target.id);
+      if (hit) g.recruited = ut.id;
+      event(room, { type: 'recruit', hit, recruiter: pid });
+      g.history.push({ type: 'recruit', hit, target: hit ? target.id : null });
+      enterAssassin(room);
+      break;
     }
     case 'lady': { // 湖中仙女：查验一名没拿过湖中仙女的人，结果只有自己看到
       if (!g || g.phase !== 'lady' || g.ladyHolder !== pid) return;
@@ -423,7 +674,7 @@ function handle(room, pid, msg, ws) {
       g.evilSuggest[pid] = msg.id; break;
     case 'assassinate': {
       if (!g || g.phase !== 'assassin' || g.assassinId !== pid) return;
-      doAssassinate(room, msg.id, ws); break;
+      doAssassinate(room, msg.id, ws, msg); break;
     }
     default: return;
   }
@@ -432,7 +683,7 @@ function handle(room, pid, msg, ws) {
 
 function applySettings(room, s) {
   if ('sorcerer' in s) { s.good_sorcerer = s.evil_sorcerer = !!s.sorcerer; } // 兼容旧版成对开关
-  for (const k of [...OPT_GOOD, ...OPT_EVIL, 'lady', 'excalibur']) if (k in s) room.settings[k] = !!s[k];
+  for (const k of [...OPT_GOOD, ...OPT_EVIL, 'messengers', 'lady', 'excalibur', 'trapper', 'plot']) if (k in s) room.settings[k] = !!s[k];
   if ('leaderMode' in s) room.settings.leaderMode = s.leaderMode === 'random' ? 'random' : 'seq';
   if ('clericTiming' in s) room.settings.clericTiming = s.clericTiming === 'propose' ? 'propose' : 'start';
   if ('lancelot' in s) room.settings.lancelot = [0, 1, 2, 3].includes(+s.lancelot) ? +s.lancelot : 0;
@@ -443,13 +694,17 @@ function applySettings(room, s) {
 
 function finishVote(room) {
   const g = room.game;
+  g.leadStolenThisVote = false;
   const approves = Object.values(g.votes).filter(Boolean).length;
   const ok = approves * 2 > room.players.length;
   const rec = { type: 'vote', quest: g.quest, attempt: g.rejects + 1, leader: room.players[g.leaderIdx].id, team: g.team, votes: { ...g.votes }, ok, excalibur: g.excalibur };
   g.history.push(rec); event(room, rec);
   clearSpeech(room);
-  if (ok) { g.rejects = 0; g.questCards = {}; g.phase = 'quest'; }
-  else {
+  if (ok) {
+    const kh = hasPlotHolders(room, 'king_returns');
+    if (kh.length) { g.plotWaitHolders = kh; g.phase = 'plot_vote'; return; }
+    nextAfterVotePass(room);
+  } else {
     g.rejects++;
     if (g.rejects >= 5) return endGame(room, 'evil', '连续 5 次组队被否决，坏人获胜');
     nextLeader(room); enterPropose(room, false);
@@ -458,41 +713,107 @@ function finishVote(room) {
 
 function finishQuest(room, excal) {
   const g = room.game;
-  const cards = Object.values(g.questCards);
-  const fails = cards.filter((c) => c === 'F').length, magics = cards.filter((c) => c === 'M').length;
+  const activeIds = g.team.filter((id) => id !== g.trapperDiscarded);
+  const cards = activeIds.map((id) => g.questCards[id]);
+  const rawFails = cards.filter((c) => c === 'F' || c === 'EF' || c === 'RF').length;
+  const magics = cards.filter((c) => c === 'M').length;
+  const msgGood = cards.filter((c) => c === 'GS').length;
+  const msgEvil = cards.filter((c) => c === 'EF').length;
+  const rogueGood = cards.filter((c) => c === 'RS').length;
+  const rogueEvil = cards.filter((c) => c === 'RF').length;
+  g.msgGoodTotal = (g.msgGoodTotal || 0) + msgGood;
+  g.msgEvilTotal = (g.msgEvilTotal || 0) + msgEvil;
+  if (rogueGood > 0) (g.rogueGoodQuests = g.rogueGoodQuests || []).push(g.quest);
+  if (rogueEvil > 0) (g.rogueEvilQuests = g.rogueEvilQuests || []).push(g.quest);
+
+  let fails = rawFails;
+  let msgAdjust = 0;
+  // 第 5 轮任务（quest === 4）：信使增援（好信件 >= 3 减 1 失败；坏信件 >= 2 加 1 失败；两边都达标抵消）
+  if (g.quest === 4 && room.settings.messengers) {
+    const gb = g.msgGoodTotal >= 3 ? 1 : 0;
+    const eb = g.msgEvilTotal >= 2 ? 1 : 0;
+    msgAdjust = eb - gb;
+    fails = Math.max(0, fails + msgAdjust);
+  }
+
   const need = g.quest === 3 && room.players.length >= 7 ? 2 : 1;
   let success = fails < need;
   if (magics % 2 === 1) success = !success; // 魔法牌反转结果（两张互相抵消）
-  g.results.push({ success, fails, magics });
-  const rec = { type: 'quest', quest: g.quest, team: g.team, fails, magics, success, need, excal: excal || null };
+  g.results.push({ success, fails, magics, msgGood, msgEvil, rogueGood, rogueEvil });
+  const rec = {
+    type: 'quest', quest: g.quest, team: g.team, fails, rawFails, magics, msgGood, msgEvil, msgAdjust,
+    rogueGood, rogueEvil, watchTarget: g.watchTarget || null, trapperExcluded: g.trapperDiscarded || null,
+    faceup: g.faceupPlayer ? { id: g.faceupPlayer, card: g.faceupCard } : null,
+    success, need, excal: excal || null,
+  };
   g.history.push(rec); event(room, rec);
   const wins = g.results.filter((r) => r.success).length, losses = g.results.length - wins;
+  // 游侠个人单独获胜（优先判，且跳过刺杀）
+  const gr = room.players.find((p) => room.roles[p.id] === 'good_rogue');
+  const er = room.players.find((p) => room.roles[p.id] === 'evil_rogue');
+  if (wins >= 3 && gr && rogueGood > 0 && (g.rogueGoodQuests || []).length >= 2) {
+    return endGame(room, 'good', `正义游侠（${gr.name}）在第 3 次任务成功时达成个人条件，独自获胜！（跳过刺杀）`, { soloWinner: gr.id });
+  }
+  if (losses >= 3 && er && rogueEvil > 0 && (g.rogueEvilQuests || []).length >= 2) {
+    return endGame(room, 'evil', `邪恶游侠（${er.name}）在第 3 次任务失败时达成个人条件，独自获胜！`, { soloWinner: er.id });
+  }
   // 暴露者：第二次任务失败后公开身份
   if (!success && losses === 2) for (const p of room.players) if (room.roles[p.id] === 'revealer' && !g.revealed.includes(p.id)) g.revealed.push(p.id);
   if (losses >= 3) return endGame(room, 'evil', '3 次任务失败，坏人获胜');
-  if (wins >= 3) { clearSpeech(room); enterAssassin(room); return; }
+  if (wins >= 3) {
+    clearSpeech(room);
+    const ut = room.players.find((p) => room.roles[p.id] === 'untrustworthy');
+    if (ut) { enterRecruit(room); return; }
+    enterAssassin(room); return;
+  }
   // 湖中仙女：第 2、3、4 轮任务结束后使用
   if (room.settings.lady && g.quest >= 1 && g.quest <= 3) { clearSpeech(room); g.phase = 'lady'; return; }
   g.quest++; nextLeader(room); enterPropose(room, true);
 }
 
+function enterRecruit(room) {
+  const g = room.game;
+  const a = room.players.find((p) => room.roles[p.id] === 'assassin');
+  const evils = room.players.filter((p) => evilNow(room, p.id));
+  g.recruitId = a ? a.id : (g.recruitAssassinId || (evils[0] && evils[0].id) || null);
+  g.phase = 'recruit';
+  if (!g.recruitId) enterAssassin(room);
+}
+
 function enterAssassin(room) {
   const g = room.game;
   g.phase = 'assassin'; g.evilSuggest = {};
-  const a = room.players.find((p) => room.roles[p.id] === 'assassin' && evilNow(room, p.id));
-  const evils = room.players.filter((p) => evilNow(room, p.id));
-  g.assassinId = a ? a.id : evils.length ? evils[crypto.randomInt(evils.length)].id : null; // 没有刺客：随机一名坏人来刺
-  g.assassinRandom = !a;
+  if (g.recruited) {
+    g.assassinId = g.recruited;
+    g.assassinRandom = false;
+  } else {
+    const a = room.players.find((p) => room.roles[p.id] === 'assassin' && evilNow(room, p.id));
+    const evils = room.players.filter((p) => evilNow(room, p.id));
+    g.assassinId = a ? a.id : evils.length ? evils[crypto.randomInt(evils.length)].id : null; // 没有刺客：随机一名坏人来刺
+    g.assassinRandom = !a;
+  }
   const as = room.settings.assassinSecs ?? 120; g.assassinSecs = as; g.assassinEndsAt = as ? Date.now() + as * 1000 : null;
   if (!g.assassinId) endGame(room, 'good', '场上没有坏人可以刺杀，好人获胜');
 }
-function doAssassinate(room, id, ws) {
+function doAssassinate(room, id, ws, msg = {}) {
   const g = room.game;
+  if (msg.mode === 'messengers' && room.settings.messengers) {
+    const ids = [...new Set(Array.isArray(msg.ids) ? msg.ids : [])].map((x) => room.players.find((p) => p.id === x)).filter(Boolean);
+    if (ids.length !== 2 || ids.some((t) => evilNow(room, t.id))) return err(ws, '请选两名好人阵营的玩家作为双信使目标');
+    g.assassinTargets = ids.map((t) => t.id);
+    g.assassinTarget = ids[0].id;
+    const hitBoth = ids.every((t) => ['junior_messenger', 'senior_messenger'].includes(room.roles[t.id]));
+    const whoLabel = `${ids[0].name} 与 ${ids[1].name}`;
+    if (hitBoth) endGame(room, 'evil', `刺客改刺双信使并猜中（${whoLabel}），坏人翻盘`);
+    else endGame(room, 'good', `刺客改刺双信使（${whoLabel}），没猜中两人，好人获胜`);
+    return;
+  }
   const target = room.players.find((p) => p.id === id);
   if (!target || evilNow(room, target.id)) return err(ws, '请选一个好人阵营的玩家');
   g.assassinTarget = target.id;
-  if (room.roles[target.id] === 'merlin') endGame(room, 'evil', `刺客刺中了梅林（${target.name}），坏人翻盘`);
-  else endGame(room, 'good', `刺客刺了 ${target.name}，没刺中梅林，好人获胜`);
+  const killer = g.recruited ? '被招募的不可信仆人' : '刺客';
+  if (room.roles[target.id] === 'merlin') endGame(room, 'evil', `${killer}刺中了梅林（${target.name}），坏人翻盘`);
+  else endGame(room, 'good', `${killer}刺了 ${target.name}，没刺中梅林，好人获胜`);
 }
 
 // ---------- 上帝模式 ----------
@@ -547,10 +868,17 @@ function godAction(room, msg, ws) {
   } else if (a === 'forceQuest') {
     if (g.phase !== 'quest') return;
     for (const id of g.team) if (g.questCards[id] === undefined) g.questCards[id] = allowedCards(room, id)[0];
-    if (g.excalibur) g.phase = 'excalibur'; else finishQuest(room);
-  } else if (a === 'skipPhase') { // 跳过湖中仙女 / 王者之剑
-    if (g.phase === 'excalibur') finishQuest(room, { holder: g.excalibur, target: null });
+    if (g.excalibur) g.phase = 'excalibur'; else nextAfterQuestCards(room);
+  } else if (a === 'skipPhase') { // 跳过特殊阶段
+    if (g.phase === 'excalibur') { g._pendingExcal = { holder: g.excalibur, target: null }; nextAfterQuestCards(room); }
     else if (g.phase === 'lady') { g.quest++; nextLeader(room); enterPropose(room, true); }
+    else if (g.phase === 'watch') enterPreQuestOrQuest(room);
+    else if (g.phase === 'trapper') { g.trapperDiscarded = g.team[0]; finishQuest(room, g._pendingExcal || null); }
+    else if (g.phase === 'plot_deal') { g.plotPending = []; g.plotAction = null; g.phase = 'propose'; }
+    else if (g.phase === 'plot_vote') nextAfterVotePass(room);
+    else if (g.phase === 'plot_prequest') g.phase = 'quest';
+    else if (g.phase === 'plot_ambush') { if (room.settings.trapper) g.phase = 'trapper'; else finishQuest(room, g._pendingExcal || null); }
+    else if (g.phase === 'recruit') enterAssassin(room);
   } else if (a === 'swapLancelot') { g.lancelotSwapped = !g.lancelotSwapped; }
   else if (a === 'toAssassin') { clearSpeech(room); enterAssassin(room); }
   else if (a === 'end') endGame(room, msg.winner === 'good' ? 'good' : 'evil', '上帝裁定结束');
@@ -578,7 +906,7 @@ wss.on('connection', (ws, req) => {
   const onMsg = async (msg) => {
     if (!msg || typeof msg !== 'object') return;
     if (msg.t === 'create' || msg.t === 'join') {
-      let name = String(msg.name || '').trim().slice(0, 12);
+      let name = noEmail(msg.name).slice(0, 12);
       const token = String(msg.token || '').slice(0, 64);
       let avatar = validAvatar(msg.avatar) ? msg.avatar : AVATARS[crypto.randomInt(AVATARS.length)];
       // 登录了账号：昵称、头像以服务器从 Supabase 读到的资料为准（客户端改不了别人的用户名）
@@ -587,10 +915,10 @@ wss.on('connection', (ws, req) => {
         acct = await accounts.lookup(msg.auth);
         if (ws.readyState !== 1) return;
         if (!acct) return err(ws, '登录已过期，请重新登录（或者先退出登录，以游客身份加入）');
-        name = acct.display_name.slice(0, 12); avatar = profileAvatar(acct) || avatar;
+        name = (noEmail(acct.display_name) || name).slice(0, 12); avatar = profileAvatar(acct) || avatar;
       }
       if (ws.readyState !== 1) return;
-      if (!name || !token) return err(ws, '请输入昵称');
+      if (!name || !token) return err(ws, EMAIL_RE.test(String(msg.name || '')) ? '昵称里不能写邮箱，换一个吧' : '请输入昵称');
       if (msg.t === 'create') {
         room = { code: newCode(), players: [], roles: {}, game: null, gods: new Set(), watchers: new Set(), settings: { ...DEFAULT_SETTINGS }, touched: Date.now() };
         rooms.set(room.code, room);
@@ -604,7 +932,7 @@ wss.on('connection', (ws, req) => {
       if (!p) {
         const same = room.players.find((x) => x.name === name);
         if (same) {
-          if (same.userId) return err(ws, `房间里已经有一位「${name}」${same.username ? '（@' + same.username + '）' : ''}，请换个昵称`);
+          if (same.userId) return err(ws, `房间里已经有一位「${name}」，请换个昵称`);
           if (acct && !room.game) return err(ws, `房间里已经有人叫「${name}」，去「我的资料」里换个昵称再进`);
           // 换手机/清了缓存：房间号 + 原来的昵称就能接回自己的位置；原玩家还在线时不允许（防冒名顶替）
           if (same.ws && same.ws.readyState === 1) return err(ws, `「${name}」正在线上。如果是你本人掉线了，请等几秒再试；否则请换个昵称`);
@@ -629,7 +957,7 @@ wss.on('connection', (ws, req) => {
       const acct = await accounts.lookup(msg.auth);
       if (ws.readyState !== 1) return;
       if (!acct || acct.id !== me.userId) return err(ws, '登录已过期，请重新登录');
-      const name = acct.display_name.slice(0, 12);
+      const name = (noEmail(acct.display_name) || me.name).slice(0, 12);
       if (!room.game && name !== me.name) {
         if (room.players.some((x) => x !== me && x.name === name)) err(ws, `房间里已经有人叫「${name}」，昵称暂时没换`);
         else me.name = name;
@@ -642,7 +970,7 @@ wss.on('connection', (ws, req) => {
       if (!r) return err(ws, '房间不存在');
       if (room && room !== r) { room.watchers.delete(ws); room.gods.delete(ws); }
       room = r; room.watchers.add(ws);
-      ws._wname = String(msg.name || '').trim().slice(0, 12) || null; // 有名字 = 观众席；没名字 = 投屏大屏
+      ws._wname = noEmail(msg.name).slice(0, 12) || null; // 有名字 = 观众席；没名字 = 投屏大屏
       return broadcast(room);
     }
     if (msg.t === 'god') {

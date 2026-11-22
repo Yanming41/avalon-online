@@ -73,7 +73,7 @@ function connect(force) {
       if (S.phase === 'propose' && S.leader === S.me && (!prev || prev.leader !== S.me || prev.phase !== 'propose')) vibrate([80, 60, 80]);
       if (S.speech && S.speech.order[S.speech.idx] === S.me && (!prev || !prev.speech || prev.speech.idx !== S.speech.idx)) vibrate(200);
       if (prev && prev.gameId === S.gameId && (S.bellSeq || 0) > (prev.bellSeq || 0)) bell();
-      if (prev && prev.gameId === S.gameId && prev.phase !== 'end' && S.phase === 'end') endAnnounce(S.winner);
+      if (prev && prev.gameId === S.gameId && prev.phase !== 'end' && S.phase === 'end') endAnnounce(S.winner, !!S.soloWinner);
       if (S.myRole) preload(S.myRole.art);
       render(); maybeEvent();
     }
@@ -262,10 +262,10 @@ function lobbyView() {
 }
 // 立绘卡片选角色
 const PICKS = {
-  good: [['merlin', 'merlin', '梅林', 'lock'], ['percival', 'percival', '派西维尔'], ['cleric', 'cleric', '牧师'], ['troublemaker', 'troublemaker', '捣蛋鬼'], ['good_sorcerer', 'good_sorcerer', '正义巫师']],
-  evil: [['assassin', 'assassin', '刺客'], ['morgana', 'morgana', '莫甘娜'], ['mordred', 'mordred', '莫德雷德'], ['oberon', 'oberon', '奥伯伦'], ['lunatic', 'lunatic', '疯子'], ['brute', 'brute', '莽夫'], ['revealer', 'revealer', '暴露者'], ['trickster', 'trickster', '诡术师'], ['evil_sorcerer', 'evil_sorcerer', '邪恶巫师']],
-  pair: [['lancelot', 'good_lancelot', '兰斯洛特']],
-  item: [['lady', 'items/lady', '湖中仙女'], ['excalibur', 'items/excalibur', '王者之剑']],
+  good: [['merlin', 'merlin', '梅林', 'lock'], ['percival', 'percival', '派西维尔'], ['cleric', 'cleric', '牧师'], ['troublemaker', 'troublemaker', '捣蛋鬼'], ['good_sorcerer', 'good_sorcerer', '正义巫师'], ['untrustworthy', 'untrustworthy', '不可信的仆人'], ['good_rogue', 'good_rogue', '正义游侠']],
+  evil: [['assassin', 'assassin', '刺客'], ['morgana', 'morgana', '莫甘娜'], ['mordred', 'mordred', '莫德雷德'], ['oberon', 'oberon', '奥伯伦'], ['lunatic', 'lunatic', '疯子'], ['brute', 'brute', '莽夫'], ['revealer', 'revealer', '暴露者'], ['trickster', 'trickster', '诡术师'], ['evil_sorcerer', 'evil_sorcerer', '邪恶巫师'], ['evil_rogue', 'evil_rogue', '邪恶游侠']],
+  pair: [['lancelot', 'good_lancelot', '兰斯洛特'], ['messengers', 'senior_messenger', '信使(3人)']],
+  item: [['lady', 'items/lady', '湖中仙女'], ['excalibur', 'items/excalibur', '王者之剑'], ['trapper', 'items/trapper', '陷阱师'], ['plot', 'items/plot', '阴谋卡']],
 };
 const LANCE = ['关闭', '规则1·第3轮起翻牌', '规则2·每轮翻牌', '规则3·不换互认'];
 const picSrc = (p) => (p.startsWith('items/') ? `img/${p}.webp` : img(p));
@@ -391,10 +391,14 @@ function setTeam(i, v) { const t = (S.settings.teamSizes || S.defaultTeam).slice
 function roleCountHint() {
   const st = S.settings, n = S.players.length, E = S.evilTotal;
   if (n < 5) return '';
-  const e = ['assassin', 'morgana', 'mordred', 'oberon', 'lunatic', 'brute', 'revealer', 'trickster', 'evil_sorcerer'].filter((k) => st[k]).length + (st.lancelot ? 1 : 0);
-  const g = 1 + ['percival', 'cleric', 'troublemaker', 'good_sorcerer'].filter((k) => st[k]).length + (st.lancelot ? 1 : 0);
+  const e = ['assassin', 'morgana', 'mordred', 'oberon', 'lunatic', 'brute', 'revealer', 'trickster', 'evil_sorcerer', 'evil_rogue'].filter((k) => st[k]).length + (st.lancelot ? 1 : 0) + (st.messengers ? 1 : 0);
+  const g = 1 + ['percival', 'cleric', 'troublemaker', 'good_sorcerer', 'untrustworthy', 'good_rogue'].filter((k) => st[k]).length + (st.lancelot ? 1 : 0) + (st.messengers ? 2 : 0);
   const bad = e > E || g > n - E;
-  return `<div class="mute" style="margin-top:6px;color:${bad ? 'var(--evil)' : ''}">${n} 人局：好人 ${n - E}（已选特殊 ${g}）· 坏人 ${E}（已选特殊 ${e}）${bad ? ' · 特殊角色太多了' : ''}${st.assassin ? '' : '<br>没选刺客：好人完成 3 次任务后，随机抽一名坏人来刺杀梅林'}</div>`;
+  const tips = [];
+  if (!st.assassin) tips.push('没选刺客：好人完成 3 次任务后，随机抽一名坏人来刺杀梅林');
+  if (st.trapper && n < 8) tips.push('提示：陷阱师规则书建议 8 人以上使用');
+  if (st.messengers && n < 7) tips.push('提示：信使规则书建议 7 人以上使用');
+  return `<div class="mute" style="margin-top:6px;color:${bad ? 'var(--evil)' : ''}">${n} 人局：好人 ${n - E}（已选特殊 ${g}）· 坏人 ${E}（已选特殊 ${e}）${bad ? ' · 特殊角色太多了' : ''}${tips.length ? '<br>' + tips.join('<br>') : ''}</div>`;
 }
 function setS(s) { isGod() && S.me !== S.hostId ? god('settings', { settings: s }) : send({ t: 'settings', settings: s }); }
 function share() { const u = location.origin + '/?r=' + S.code; navigator.clipboard ? navigator.clipboard.writeText(u).then(() => toast('已复制：' + u, true)) : prompt('复制链接', u); }
@@ -510,7 +514,7 @@ function gameView() {
     if (amA) h += `<button class="evil" onclick="if(sel.size===1&&confirm('确定刺杀 '+P([...sel][0]).name+'？'))send({t:'assassinate',id:[...sel][0]})" ${sel.size !== 1 ? 'disabled' : ''}>🗡️ 刺杀</button>`;
     h += '</div>';
   } else if (S.phase === 'end') {
-    h += `<div class="banner" style="background:${S.winner === 'good' ? 'var(--good)' : 'var(--evil)'};color:#fff;font-size:20px">${S.winner === 'good' ? '🏆 正义阵营获胜' : '😈 邪恶阵营获胜'}<div style="font-size:14px;font-weight:400">${esc(S.reason)}</div></div>`;
+    h += `<div class="banner" style="background:${S.winner === 'good' ? 'var(--good)' : 'var(--evil)'};color:#fff;font-size:20px">${S.soloWinner ? '🏆 游侠独自获胜' : S.winner === 'good' ? '🏆 正义阵营获胜' : '😈 邪恶阵营获胜'}<div style="font-size:14px;font-weight:400">${esc(S.reason)}</div></div>`;
     h += `<div class="card"><h3>身份揭晓</h3><div class="gallery">${S.allRoles.map((r) => `<div class="gi ${r.evil ? 'e' : 'g'} ${S.assassinTarget === r.id ? 'dead' : ''}" onclick="showDetail('${r.role}',this.querySelector('img'))"><img class="portrait" src="${img(r.art)}" alt="" onerror="this.onerror=null;this.src='${img(r.role)}'"><i class="frm"></i><div class="cap">${seat(r.id)}号 ${nm(r.id)}<br><b style="color:${r.evil ? '#ff8a85' : '#9cc3ff'}">${r.name}</b>${S.assassinTarget === r.id ? ' 🗡️' : ''}</div></div>`).join('')}</div></div>
     <div class="card">${plist(false)}</div>`;
     if (S.me === S.hostId || isGod()) h += `<button onclick="${isGod() && S.me !== S.hostId ? "god('start')" : "send({t:'start'})"}">再来一局（重新发身份）</button><button class="sec" onclick="${isGod() && S.me !== S.hostId ? "god('lobby')" : "send({t:'lobby'})"}">回到大厅改配置</button>`;
@@ -518,11 +522,24 @@ function gameView() {
   h += voteMatrix() + notesPanel();
   return h;
 }
-const CARD = { S: { t: '成功', e: '✓', b: 'good', c: 'good' }, F: { t: '失败', e: '✗', b: 'evil', c: 'evil' }, M: { t: '魔法', e: '✨', b: 'sec', c: 'lead' } };
+const CARD = {
+  S: { t: '成功', e: '✓', b: 'good', c: 'good' },
+  F: { t: '失败', e: '✗', b: 'evil', c: 'evil' },
+  M: { t: '魔法', e: '✨', b: 'sec', c: 'lead' },
+  GS: { t: '好信件', e: '📜', b: 'good', c: 'good' },
+  EF: { t: '坏信件', e: '🦇', b: 'evil', c: 'evil' },
+  RS: { t: '游侠成功', e: '🏹', b: 'good', c: 'good' },
+  RF: { t: '游侠失败', e: '🕶️', b: 'evil', c: 'evil' },
+};
 function cardHint() {
-  const r = S.myRole.role, c = S.myCards.join('');
-  if (c === 'SM') return '魔法牌会把本次任务结果反转（两张魔法互相抵消）· 每局只能用 1 次';
+  const r = S.myRole.role, c = S.myCards.join(',');
+  if (S.rogue && S.rogue.watchTarget === S.me && /rogue/.test(r)) return '你本轮持有监视标记，不能打出游侠牌';
+  if (c.includes('M')) return '魔法牌会把本次任务结果反转（两张魔法互相抵消）· 每局只能用 1 次';
   if (c === 'S' && /sorcerer/.test(r)) return '你这局已经用过魔法牌了，只能出成功';
+  if (c.includes('GS')) return '好信件效果等同成功，整局最多打 2 次（累计 3 张第 5 轮减 1 败）';
+  if (c.includes('EF')) return '坏信件效果等同失败（累计 2 张第 5 轮加 1 败）';
+  if (c.includes('RS')) return '游侠成功等同成功；第 3 次任务成功且之前也打过至少 1 次则独自获胜';
+  if (c.includes('RF')) return '游侠失败等同失败；第 3 次任务失败且之前也打过至少 1 次则独自获胜';
   if (r === 'lunatic') return '疯子必须出失败';
   if (r === 'brute' && c === 'S') return '莽夫第 4、5 轮只能出成功';
   if (c === 'S') return '好人只能出成功';
@@ -541,6 +558,16 @@ function infoCard() {
   if (S.rolesInGame) bits.push(`<div><b>本局角色：</b>${S.rolesInGame.map((r) => `${ROLES[r].emo}${ROLES[r].name}`).join('、')}</div>`);
   if (S.lancelot) bits.push(`<div><b>⚜️ 兰斯洛特（规则${S.lancelot.rule}）：</b>${S.lancelot.rule === 3 ? '不换阵营' : `目前${S.lancelot.swapped ? '<b style="color:var(--evil)">已互换阵营</b>' : '未换阵营'} · 已翻 ${S.lancelot.flips.map((f) => (f.card === 'switch' ? '🔄' : '⏸')).join('') || '无'} · 剩 ${S.lancelot.left} 张`}</div>`);
   if (S.lady) bits.push(`<div><b>🧜‍♀️ 湖中仙女：</b>在 ${nm(S.lady.holder)} 手里${S.lady.log.length ? ' · ' + S.lady.log.map((l) => `${seat(l.holder)}→${seat(l.target)}`).join('，') : ''}</div>`);
+  if (S.messengers) bits.push(`<div><b>📜 信使：</b>好信件 ${S.messengers.good}/3 · 坏信件 ${S.messengers.evil}/2</div>`);
+  if (S.rogue) bits.push(`<div><b>🏹 游侠标记：</b>好游侠 ${S.rogue.good} 次 · 坏游侠 ${S.rogue.evil} 次${S.rogue.watchTarget ? ` · 👁 监视：${nm(S.rogue.watchTarget)}` : ''}</div>`);
+  if (S.trapper) bits.push(`<div><b>🕸️ 陷阱师：</b>每轮多带 1 人，出牌后由队长偷看并弃 1 张</div>`);
+  if (S.plot) {
+    const holders = S.players.map((p) => {
+      const hs = S.plot.hands[p.id] || [];
+      return hs.length ? `${seat(p.id)}号(${hs.map((c) => PLOT_CARDS[c.type]?.name || c.type).join('、')})` : '';
+    }).filter(Boolean);
+    bits.push(`<div><b>🃏 阴谋卡（牌库余 ${S.plot.deckLeft}）：</b>${holders.length ? holders.join('；') : '无人持有'}</div>`);
+  }
   if (S.revealed && S.revealed.length) bits.push(`<div style="color:var(--evil)"><b>📢 暴露者公开：</b>${S.revealed.map(nm).join('、')} 是坏人</div>`);
   return bits.length ? `<div class="card" style="font-size:13px;line-height:1.7"><details ${infoOpen ? 'open' : ''} ontoggle="infoOpen=this.open"><summary>ℹ️ 局面信息</summary>${bits.join('')}</details></div>` : '';
 }
@@ -666,15 +693,30 @@ function maybeEvent() {
     <div class="center">${e.card === 'switch' ? '两个兰斯洛特交换阵营！' : '阵营不变'}<br><span class="mute">现在：正义兰斯洛特是${e.swapped ? '坏人' : '好人'}，邪恶兰斯洛特是${e.swapped ? '好人' : '坏人'}</span></div>`;
   } else if (e.type === 'lady') {
     h = `<h3 style="margin:0">🧜‍♀️ 湖中仙女</h3><p>${nm(e.holder)} 查验了 ${nm(e.target)}。</p><div class="mute">结果只有查验的人知道，湖中仙女现在交给 ${nm(e.target)}。</div>`;
+  } else if (e.type === 'recruit') {
+    h = `<h3 style="margin:0">⚖️ 招募阶段</h3><p>${e.hit ? '刺客猜中了不可信的仆人！他已转为坏人，并代替刺客执行刺杀！' : '刺客没有猜中不可信的仆人，仆人保持好人身份，刺客照常刺杀。'}</p>`;
+  } else if (e.type === 'plotUse') {
+    const pn = (window.PLOT_CARDS && PLOT_CARDS[e.card]?.name) || e.card;
+    h = `<h3 style="margin:0">🃏 阴谋卡 · ${esc(pn)}</h3><p>${nm(e.by)} 使用了「${esc(pn)}」${e.target ? `（目标：${nm(e.target)}）` : ''}。</p>`;
   } else {
-    const cards = Array(e.team.length).fill('s'); for (let i = 0; i < e.fails; i++) cards[cards.length - 1 - i] = 'f';
-    for (let i = 0; i < (e.magics || 0); i++) cards[i] = 'm';
+    const cards = Array(Math.max(1, e.team.length - (e.trapperExcluded ? 1 : 0))).fill('s');
+    for (let i = 0; i < (e.rawFails ?? e.fails); i++) if (i < cards.length) cards[cards.length - 1 - i] = 'f';
+    for (let i = 0; i < (e.magics || 0); i++) if (i < cards.length) cards[i] = 'm';
     cards.sort(() => Math.random() - 0.5);
-    const ex = e.excal ? `<div class="mute center">🔱 ${nm(e.excal.holder)} ${e.excal.target ? `用王者之剑翻转了 ${nm(e.excal.target)} 的牌` : '没有使用王者之剑'}</div>` : '';
+    const ex = (e.excal ? `<div class="mute center">🔱 ${nm(e.excal.holder)} ${e.excal.target ? `用王者之剑翻转了 ${nm(e.excal.target)} 的牌` : '没有使用王者之剑'}</div>` : '')
+      + (e.trapperExcluded ? `<div class="mute center">🕸️ 队长已偷看并弃掉了 ${nm(e.trapperExcluded)} 的牌</div>` : '')
+      + (e.faceup && e.faceup.card ? `<div class="mute center">🔍 明牌出牌：${nm(e.faceup.id)} 亮出了「${CARD[e.faceup.card]?.t || e.faceup.card}」</div>` : '');
+    const extraLine = [
+      e.msgGood ? `好信件 +${e.msgGood}` : '',
+      e.msgEvil ? `坏信件 +${e.msgEvil}` : '',
+      e.msgAdjust ? `第5轮信使增援 ${e.msgAdjust > 0 ? '+1 败' : '-1 败'}` : '',
+      e.rogueGood ? `🏹 游侠成功 ×${e.rogueGood}` : '',
+      e.rogueEvil ? `🕶️ 游侠失败 ×${e.rogueEvil}` : '',
+    ].filter(Boolean).join(' · ');
     h = ex + `<h3 style="margin:0;color:${e.success ? 'var(--good)' : 'var(--evil)'}">第 ${e.quest + 1} 轮任务${e.success ? '成功 🔵' : '失败 🔴'}</h3>
     <div class="mute" style="margin:6px 0">队员：${e.team.map(nm).join('、')}</div>
     <div class="cards">${cards.map((c, i) => `<div class="qc ${c === 'm' ? 's' : c}" style="animation-delay:${i * 0.25}s;${c === 'm' ? 'background:#7b4fd6' : ''}">${c === 's' ? '✓' : c === 'f' ? '✗' : '✨'}</div>`).join('')}</div>
-    <div class="center">${e.fails} 张失败${e.magics ? ` · ${e.magics} 张魔法（${e.magics % 2 ? '结果被反转' : '互相抵消'}）` : ''}${e.need === 2 ? '<br>本轮需要 2 张失败才算失败' : ''}</div>`;
+    <div class="center">${e.fails} 张失败${e.magics ? ` · ${e.magics} 张魔法（${e.magics % 2 ? '结果被反转' : '互相抵消'}）` : ''}${extraLine ? '<br>' + extraLine : ''}${e.need === 2 ? '<br>本轮需要 2 张失败才算失败' : ''}</div>`;
   }
   vibrate(100);
   $('#modal').innerHTML = `<div class="modal" onclick="closeModal()"><div class="box">${h}<button class="sec" style="margin-top:12px">知道了</button></div></div>`;
@@ -697,14 +739,21 @@ function tvView() {
   }
   const n = S.players.length, need = S.teamSizes[S.quest];
   let banner = '';
-  if (S.phase === 'propose') banner = `第 ${S.quest + 1} 轮 · 第 ${S.rejects + 1} 次组队 · <span style="font-size:1.35em;vertical-align:-.06em">👑</span> ${nm(S.leader)} 选 ${need} 人`;
+  if (S.phase === 'plot_deal') banner = `🃏 队长 ${nm(S.leader)} 正在分配本轮阴谋卡`;
+  else if (S.phase === 'propose') banner = `第 ${S.quest + 1} 轮 · 第 ${S.rejects + 1} 次组队 · <span style="font-size:1.35em;vertical-align:-.06em">👑</span> ${nm(S.leader)} 选 ${need} 人`;
   else if (S.phase === 'vote') banner = `🚗 发车投票中（${S.voted.length}/${n} 已投）`;
+  else if (S.phase === 'plot_vote') banner = `🃏 等待持「国王归来」玩家决定是否否决组队`;
+  else if (S.phase === 'watch') banner = `👁 队长 ${nm(S.leader)} 正在放置游侠监视标记`;
+  else if (S.phase === 'plot_prequest') banner = `🃏 等待持「找到你了！」玩家决定是否指定明牌出牌`;
   else if (S.phase === 'quest') banner = `⚔️ 任务执行中（${S.questDone.length}/${S.team.length}）${S.quest === 3 && S.twoFailQuest4 ? ' · 需要 2 张失败' : ''}`;
   else if (S.phase === 'excalibur') banner = `🔱 ${nm(S.excalibur)} 正在决定是否使用王者之剑`;
+  else if (S.phase === 'plot_ambush') banner = `🃏 等待持「伏击」玩家决定是否偷看任务牌`;
+  else if (S.phase === 'trapper') banner = `🕸️ 队长 ${nm(S.leader)} 正在挑选并弃掉 1 张任务牌`;
   else if (S.phase === 'lady') banner = `🧜‍♀️ ${nm(S.lady.holder)} 正在使用湖中仙女`;
-  else if (S.phase === 'assassin') banner = `🗡️ 刺杀环节：好人完成 3 次任务，刺客 ${nm(S.assassin)} 正在寻找梅林`;
-  else if (S.phase === 'end') banner = `${S.winner === 'good' ? '🏆 正义阵营获胜' : '😈 邪恶阵营获胜'} · ${esc(S.reason)}`;
-  const bstyle = S.phase === 'end' ? `background:${S.winner === 'good' ? 'var(--good)' : 'var(--evil)'};color:#fff` : S.phase === 'assassin' ? 'background:#5e1d1d;color:#fff' : '';
+  else if (S.phase === 'recruit') banner = `⚖️ 招募阶段：好人完成 3 次任务，刺客正在寻找不可信的仆人`;
+  else if (S.phase === 'assassin') banner = `🗡️ 刺杀环节：好人完成 3 次任务，${nm(S.assassin)} 正在寻找${S.canKillMessengers ? '梅林或双信使' : '梅林'}`;
+  else if (S.phase === 'end') banner = `${S.soloWinner ? '🏆 游侠独自获胜' : S.winner === 'good' ? '🏆 正义阵营获胜' : '😈 邪恶阵营获胜'} · ${esc(S.reason)}`;
+  const bstyle = S.phase === 'end' ? `background:${S.winner === 'good' ? 'var(--good)' : 'var(--evil)'};color:#fff` : (S.phase === 'assassin' || S.phase === 'recruit') ? 'background:#5e1d1d;color:#fff' : '';
   // 大屏：左边是放大的圆桌（中间大沙漏/大字），右边是任务进度和票型
   let left = `<div class="tvtable">${roundTable(centerStage())}${typeof tvSpeechBar === 'function' ? tvSpeechBar() : ''}</div>`;
   let right = `<div class="banner" style="${bstyle}">${banner}</div>` + questTrack();
@@ -716,7 +765,9 @@ function lobbyRoleList() {
   const st = S.settings, on = Object.keys(ROLES).filter((k) => st[k]);
   const names = ['梅林', ...on.map((k) => ROLES[k].name)];
   if (st.lancelot) names.push(`⚜️兰斯洛特（规则${st.lancelot}）`);
+  if (st.messengers) names.push('📜信使(3人)');
   if (st.lady) names.push('🧜‍♀️湖中仙女'); if (st.excalibur) names.push('🔱王者之剑');
+  if (st.trapper) names.push('🕸️陷阱师'); if (st.plot) names.push('🃏阴谋卡');
   return names.join('　') + `<div class="mute">每人发言 ${st.speechSecs} 秒</div>`;
 }
 
@@ -748,7 +799,7 @@ function godView() {
   ${S.phase === 'vote' ? `<button class="sm sec" onclick="god('forceVote',{approve:true})">未投的人补同意</button><button class="sm sec" onclick="god('forceVote',{approve:false})">未投的人补反对</button>` : ''}
   ${S.phase === 'quest' ? `<button class="sm sec" onclick="god('forceQuest')">未出牌的补成功</button>` : ''}
   ${S.speech ? `<button class="sm sec" onclick="god('speechSkip')">跳过发言人</button><button class="sm sec" onclick="god('speechAdd')">发言 +30 秒</button>` : ''}
-  ${['lady', 'excalibur'].includes(S.phase) ? `<button class="sm sec" onclick="god('skipPhase')">跳过${S.phase === 'lady' ? '湖中仙女' : '王者之剑'}</button>` : ''}
+  ${['lady', 'excalibur', 'watch', 'trapper', 'plot_deal', 'plot_vote', 'plot_prequest', 'plot_ambush', 'recruit'].includes(S.phase) ? `<button class="sm sec" onclick="god('skipPhase')">跳过当前阶段(${S.phase})</button>` : ''}
   ${S.lancelot ? `<button class="sm sec" onclick="god('swapLancelot')">兰斯洛特换阵营</button><span class="mute">剩余忠诚牌：${(S.lancelotDeck || []).map((c) => (c === 'switch' ? '🔄' : '⏸')).join('') || '无'}</span>` : ''}
   <button class="sm sec" onclick="god('toAssassin')">直接进入刺杀</button>
   <button class="sm good" onclick="confirm('判好人胜？')&&god('end',{winner:'good'})">判好人胜</button><button class="sm evil" onclick="confirm('判坏人胜？')&&god('end',{winner:'evil'})">判坏人胜</button>
@@ -848,13 +899,13 @@ function bell() {
   vibrate([200, 100, 200]);
   setTimeout(() => speak('发言时间到'), 380);
 }
-function endAnnounce(winner) {
+function endAnnounce(winner, solo = false) {
   if (muted) return;
   if (actx) {
     const notes = winner === 'good' ? [523.25, 659.25, 783.99, 1046.5] : [392, 311.13, 261.63, 196];
     notes.forEach((f, i) => tone(f, i * 0.09, 0.55, 0.18));
   }
-  setTimeout(() => speak(winner === 'good' ? '好人胜利' : '坏人胜利'), 380);
+  setTimeout(() => speak(solo ? '游侠独自获胜' : winner === 'good' ? '好人胜利' : '坏人胜利'), 380);
 }
 function tickSound() { if (muted || !actx) return; tone(660, 0, 0.12, 0.15); }
 function toggleMute() {

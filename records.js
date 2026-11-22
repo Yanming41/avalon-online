@@ -50,8 +50,9 @@ async function save(rec) {
   }
 }
 
-const list = () => games.map(({ history, ...g }) => g); // 列表不带逐轮明细
-const get = (id) => games.find((g) => g.id === id) || null;
+const publicRecord = (g) => g ? { ...g, players: g.players.map(({ username, ...p }) => p) } : null;
+const list = () => games.map(({ history, ...g }) => publicRecord(g)); // 列表不带逐轮明细
+const get = (id) => publicRecord(games.find((g) => g.id === id));
 const enabled = () => !!(TOKEN && REPO);
 
-module.exports = { load, save, list, get, enabled };
+module.exports = { load, save, list, get, enabled, publicRecord };

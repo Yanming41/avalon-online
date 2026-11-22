@@ -65,7 +65,7 @@ async function saveGame(rec, userIds) {
     });
     if (!g.ok) return console.log('accounts: 写对局失败', g.status, (await g.text()).slice(0, 200));
     const rows = rec.players.map((p, i) => ({
-      game_id: rec.id, seat: p.seat, user_id: userIds[i] || null, name: p.name, role: p.role, evil: !!p.evil, won: (rec.winner === 'evil') === !!p.evil,
+      game_id: rec.id, seat: p.seat, user_id: userIds[i] || null, name: p.name, role: p.role, evil: !!p.evil, won: rec.soloWinner ? p.seat === rec.soloWinner : (rec.winner === 'evil') === !!p.evil,
     }));
     const r = await rest('game_players', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates' }, body: JSON.stringify(rows) });
     if (!r.ok) console.log('accounts: 写玩家战绩失败', r.status, (await r.text()).slice(0, 200));
