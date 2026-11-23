@@ -43,7 +43,7 @@ const DEFAULT_SETTINGS = {
   leaderMode: 'seq', // seq 按座位顺序 / random 每轮随机
   clericTiming: 'start', // start 开局查首任队长 / propose 首次发车后查发车的队长
   lancelot: 0, // 0 关闭，1/2/3 对应三套兰斯洛特规则
-  lady: false, excalibur: false, trapper: false, plot: false, speechSecs: 90, assassinSecs: 120,
+  lady: false, excalibur: false, trapper: false, plot: false, speechSecs: 90, recruitSecs: 60, assassinSecs: 120,
 };
 
 const rooms = new Map();
@@ -217,7 +217,7 @@ function viewFor(room, pid, god) {
   }
   if (g.phase === 'vote' && g.votes[pid] !== undefined) v.myVote = g.votes[pid];
   if (g.phase === 'quest' && g.team.includes(pid)) { v.myCards = allowedCards(room, pid); if (g.questCards[pid] !== undefined) v.myCard = true; }
-  if (g.phase === 'recruit') v.recruit = { recruiter: g.recruitId };
+  if (g.phase === 'recruit') v.recruit = { recruiter: g.recruitId, endsAt: g.recruitEndsAt || null, secs: g.recruitSecs || 0 };
   if (g.phase === 'assassin' || g.phase === 'end') { v.assassinRandom = !!g.assassinRandom; v.recruited = g.recruited || null; }
   if (g.phase === 'assassin') {
     v.assassin = g.assassinId; v.assassinEndsAt = g.assassinEndsAt || null; v.assassinSecs = g.assassinSecs || 0;
@@ -688,6 +688,7 @@ function applySettings(room, s) {
   if ('clericTiming' in s) room.settings.clericTiming = s.clericTiming === 'propose' ? 'propose' : 'start';
   if ('lancelot' in s) room.settings.lancelot = [0, 1, 2, 3].includes(+s.lancelot) ? +s.lancelot : 0;
   if ('assassinSecs' in s) room.settings.assassinSecs = Math.max(0, Math.min(900, parseInt(s.assassinSecs) || 0));
+  if ('recruitSecs' in s) room.settings.recruitSecs = Math.max(0, Math.min(900, parseInt(s.recruitSecs) || 0));
   if ('teamSizes' in s) room.settings.teamSizes = Array.isArray(s.teamSizes) && s.teamSizes.length === 5 ? s.teamSizes.map((x) => Math.max(1, Math.min(30, parseInt(x) || 1))) : null;
   if ('speechSecs' in s) room.settings.speechSecs = Math.max(15, Math.min(600, parseInt(s.speechSecs) || 90));
 }
@@ -777,6 +778,7 @@ function enterRecruit(room) {
   const evils = room.players.filter((p) => evilNow(room, p.id));
   g.recruitId = a ? a.id : (g.recruitAssassinId || (evils[0] && evils[0].id) || null);
   g.phase = 'recruit';
+  const rs = room.settings.recruitSecs ?? 60; g.recruitSecs = rs; g.recruitEndsAt = rs ? Date.now() + rs * 1000 : null;
   if (!g.recruitId) enterAssassin(room);
 }
 

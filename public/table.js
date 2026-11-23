@@ -233,7 +233,7 @@ function centerStage() {
     case 'plot_ambush': return head('伏击', '决定是否偷看任务牌');
     case 'trapper': return head('陷阱师', `队长 ${seat(S.leader)}号 偷看并弃 1 张牌`);
     case 'lady': return head('湖中仙女', `${seat(S.lady.holder)}号 正在查验`);
-    case 'recruit': return head('招募阶段', `${seat(S.recruit.recruiter)}号 尝试招募仆人`);
+    case 'recruit': return (S.recruit && S.recruit.endsAt ? hourglass(S.recruit.endsAt, S.recruit.secs, WATCH ? 150 : 38) : '') + head('招募阶段', `${seat(S.recruit.recruiter)}号 尝试招募仆人`);
     case 'assassin': return (S.assassinEndsAt ? hourglass(S.assassinEndsAt, S.assassinSecs, WATCH ? 150 : 38) : '') + head(S.canKillMessengers ? '最终刺杀' : '刺杀梅林', S.assassinRandom ? `没有刺客 · 随机抽中 ${seat(S.assassin)}号 拍板` : `${seat(S.assassin)}号 拍板`);
     case 'end': return `<div class="cs-t ${S.winner}">${S.soloWinner ? '游侠独自获胜' : S.winner === 'good' ? '正义阵营获胜' : '邪恶阵营获胜'}</div><div class="cs-s">${esc(S.reason)}</div>`;
   }

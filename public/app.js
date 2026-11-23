@@ -255,6 +255,7 @@ function lobbyView() {
     ${roleCountHint()}
     ${teamSizeCtl(host)}
     <label class="ck">🗡️ 刺杀时限 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({assassinSecs:+this.value})">${[0, 60, 120, 180, 300].map((s) => `<option value="${s}" ${(st.assassinSecs ?? 120) === s ? 'selected' : ''}>${s ? s / 60 + ' 分钟' : '不限时'}</option>`).join('')}</select></label>
+    ${st.untrustworthy ? `<label class="ck">⚖️ 招募时限 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({recruitSecs:+this.value})">${[0, 30, 60, 90, 120, 180].map((s) => `<option value="${s}" ${(st.recruitSecs ?? 60) === s ? 'selected' : ''}>${s ? (s >= 60 ? s / 60 + ' 分钟' : s + ' 秒') : '不限时'}</option>`).join('')}</select></label>` : ''}
     <label class="ck">⏱ 每人发言时长 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({speechSecs:+this.value})">${[30, 60, 90, 120, 180, 300].map((s) => `<option value="${s}" ${st.speechSecs === s ? 'selected' : ''}>${s >= 60 ? s / 60 + ' 分钟' : s + ' 秒'}</option>`).join('')}</select></label>
     <label class="ck">${ic('crown')} 队长轮换 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({leaderMode:this.value})"><option value="seq" ${st.leaderMode !== 'random' ? 'selected' : ''}>按座位顺序</option><option value="random" ${st.leaderMode === 'random' ? 'selected' : ''}>每轮随机</option></select></label>
     ${st.cleric ? `<label class="ck">${ic('eye')} 牧师查验 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({clericTiming:this.value})"><option value="start" ${st.clericTiming !== 'propose' ? 'selected' : ''}>开局查首任队长</option><option value="propose" ${st.clericTiming === 'propose' ? 'selected' : ''}>首次发车后查发车的队长</option></select></label>` : ''}</div>
@@ -935,13 +936,23 @@ function tick() {
   document.querySelectorAll('.bar i[data-end]').forEach((el) => { el.style.width = Math.max(0, Math.min(100, ((+el.dataset.end - now) / 1000 / +el.dataset.secs) * 100)) + '%'; });
 }
 setInterval(tick, 500);
-// 刺杀超时：疯狂提醒——刺客/坏人手机每 3 秒震动+警报，投屏全屏红闪+警报，直到刺下去
+// 刺杀 / 招募超时：疯狂提醒——对应玩家手机每 3 秒震动+警报，投屏全屏红闪+警报，直到提交为止
 let lastNag = 0;
 setInterval(() => {
-  const over = S && S.phase === 'assassin' && S.assassinEndsAt && Date.now() + clockSkew > S.assassinEndsAt;
-  document.body.classList.toggle('nag', !!over);
+  const isAss = S && S.phase === 'assassin' && S.assassinEndsAt && Date.now() + clockSkew > S.assassinEndsAt;
+  const isRec = S && S.phase === 'recruit' && S.recruit && S.recruit.endsAt && Date.now() + clockSkew > S.recruit.endsAt;
+  const over = !!(isAss || isRec);
+  document.body.classList.toggle('nag', over);
   if (!over || Date.now() - lastNag < 3000) return;
   lastNag = Date.now();
+  if (isRec) {
+    const amR = S.recruit.recruiter === S.me;
+    if (amR || WATCH) {
+      if (!muted && actx) [0, 0.18, 0.36].forEach((t) => tone(amR ? 1200 : 900, t, 0.12, 0.25));
+      if (amR) { vibrate([300, 100, 300, 100, 300]); toast('⏰ 招募超时了！快选人！'); }
+    }
+    return;
+  }
   const amA = S.assassin === S.me, amEvil = S.evilTeam && S.evilTeam.includes(S.me);
   if (amA || amEvil || WATCH) {
     if (!muted && actx) [0, 0.18, 0.36].forEach((t) => tone(amA ? 1200 : 900, t, 0.12, 0.25));

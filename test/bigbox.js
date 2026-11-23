@@ -67,12 +67,12 @@ async function playQuest(R, team, cardFn, opts = {}) {
     const c = by(id);
     tx(c, { t: 'quest', card: cardFn(id, c.s.myCards) });
   }
-  await sleep(120);
+  await until(() => R.cl.every((c) => c.s.phase !== 'quest'));
   if (S().phase === 'excalibur') { tx(by(S().excalibur), { t: 'excalibur', id: opts.excalTarget || null }); await sleep(90); }
   if (S().phase === 'plot_ambush') await passHolders(R, 'ambush');
   if (S().phase === 'trapper') {
     const drop = opts.trapperDrop || team[0];
-    tx(by(S().leader), { t: 'trapper', id: drop }); await sleep(100);
+    tx(by(S().leader), { t: 'trapper', id: drop }); await until(() => R.cl.every((c) => c.s.phase !== 'trapper'));
   }
 }
 
@@ -97,11 +97,12 @@ async function playQuest(R, team, cardFn, opts = {}) {
     if (S().phase === 'lady') {
       const h = S().lady.holder;
       const tgt = h !== ut ? ut : goods[0];
-      tx(by(h), { t: 'lady', id: tgt }); await sleep(90);
+      tx(by(h), { t: 'lady', id: tgt }); await until(() => R.cl.every((c) => c.s.phase === 'propose'));
       if (tgt === ut) assert(by(h).s.myChecks.at(-1).evil === false, '湖中仙女查不可信的仆人显示为好人');
     }
     await playQuest(R, [ut, goods[0], goods[1]], () => 'S');
     assert(S().phase === 'recruit' && S().recruit.recruiter === ass, '第3次任务成功后先进入招募阶段');
+    assert(S().recruit.secs === 60 && typeof S().recruit.endsAt === 'number' && S().recruit.endsAt > Date.now(), '招募阶段默认带有 60 秒倒计时');
 
     // 1A: 刺客招募猜错 -> 不可信的仆人保持好人，原刺客继续刺杀
     tx(by(ass), { t: 'recruit', id: mer }); await sleep(100);
@@ -112,7 +113,7 @@ async function playQuest(R, team, cardFn, opts = {}) {
     R.close();
   }
   {
-    const R = await room(6, { percival: false, morgana: false, untrustworthy: true });
+    const R = await room(6, { percival: false, morgana: false, untrustworthy: true, recruitSecs: 90 });
     const { S, by, who, tx } = R;
     const ut = who('untrustworthy').id, mer = who('merlin').id, ass = who('assassin').id;
     const ids = S().players.map((p) => p.id);
@@ -120,7 +121,7 @@ async function playQuest(R, team, cardFn, opts = {}) {
     await playQuest(R, goods.slice(0, 2), () => 'S');
     await playQuest(R, goods.slice(0, 3), () => 'S');
     await playQuest(R, goods.slice(0, 4), () => 'S');
-    assert(S().phase === 'recruit', '6人局3胜进入招募阶段');
+    assert(S().phase === 'recruit' && S().recruit.secs === 90, '6人局3胜进入招募阶段且自定义90秒生效');
     tx(by(ass), { t: 'recruit', id: ut }); await sleep(100);
     assert(S().phase === 'assassin' && S().assassin === ut && S().recruited === ut, '猜中不可信的仆人 -> 倒戈并接管刺杀');
     assert(by(ut).s.myRole.evilNow === true, '被招募后不可信的仆人变为邪恶阵营');
