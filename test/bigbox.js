@@ -131,6 +131,22 @@ async function playQuest(R, team, cardFn, opts = {}) {
     assert(S().phase === 'end' && S().winner === 'evil' && S().reason.includes('不可信'), '被招募的仆人刺中梅林翻盘');
     R.close();
   }
+  {
+    const R = await room(5, { percival: false, morgana: false, untrustworthy: true, recruitSecs: 1, assassinSecs: 1 });
+    const { S } = R;
+    const ids = S().players.map((p) => p.id);
+    const goods = ids.filter((id) => !R.role(id).evil);
+    await playQuest(R, goods.slice(0, 2), () => 'S');
+    await playQuest(R, goods.slice(0, 3), () => 'S');
+    await playQuest(R, goods.slice(0, 2), () => 'S');
+    assert(S().phase === 'recruit' && S().recruit.secs === 1, '进入 1 秒招募倒计时');
+    await until(() => R.cl.every((c) => c.s.phase === 'assassin'), 2500);
+    const rh = S().history.find((h) => h.type === 'recruit');
+    assert(S().phase === 'assassin' && rh && rh.auto, '招募超时后自动随机招募并进入刺杀');
+    await until(() => R.cl.every((c) => c.s.phase === 'end'), 2500);
+    assert(S().phase === 'end' && S().assassinTarget && S().reason.includes('超时随机'), '接管/刺杀超时后自动随机刺杀结束');
+    R.close();
+  }
 
   // ---------- 2. 陷阱师：队伍+1人，队长偷看并弃掉1张牌 ----------
   {

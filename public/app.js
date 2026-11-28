@@ -254,8 +254,10 @@ function lobbyView() {
     ${pickGrid(host)}
     ${roleCountHint()}
     ${teamSizeCtl(host)}
+    <label class="ck">🗳️ 投票时限 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({voteSecs:+this.value})">${[0, 15, 30, 45, 60, 90, 120].map((s) => `<option value="${s}" ${(st.voteSecs ?? 60) === s ? 'selected' : ''}>${s ? (s >= 60 ? s / 60 + ' 分钟' : s + ' 秒') : '不限时'}</option>`).join('')}</select></label>
     <label class="ck">🗡️ 刺杀时限 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({assassinSecs:+this.value})">${[0, 60, 120, 180, 300].map((s) => `<option value="${s}" ${(st.assassinSecs ?? 120) === s ? 'selected' : ''}>${s ? s / 60 + ' 分钟' : '不限时'}</option>`).join('')}</select></label>
     ${st.untrustworthy ? `<label class="ck">⚖️ 招募时限 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({recruitSecs:+this.value})">${[0, 30, 60, 90, 120, 180].map((s) => `<option value="${s}" ${(st.recruitSecs ?? 60) === s ? 'selected' : ''}>${s ? (s >= 60 ? s / 60 + ' 分钟' : s + ' 秒') : '不限时'}</option>`).join('')}</select></label>` : ''}
+    ${st.lady ? `<label class="ck">🧜‍♀️ 仙女时限 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({ladySecs:+this.value})">${[0, 30, 45, 60, 90, 120].map((s) => `<option value="${s}" ${(st.ladySecs ?? 60) === s ? 'selected' : ''}>${s ? (s >= 60 ? s / 60 + ' 分钟' : s + ' 秒') : '不限时'}</option>`).join('')}</select></label>` : ''}
     <label class="ck">⏱ 每人发言时长 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({speechSecs:+this.value})">${[30, 60, 90, 120, 180, 300].map((s) => `<option value="${s}" ${st.speechSecs === s ? 'selected' : ''}>${s >= 60 ? s / 60 + ' 分钟' : s + ' 秒'}</option>`).join('')}</select></label>
     <label class="ck">${ic('crown')} 队长轮换 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({leaderMode:this.value})"><option value="seq" ${st.leaderMode !== 'random' ? 'selected' : ''}>按座位顺序</option><option value="random" ${st.leaderMode === 'random' ? 'selected' : ''}>洗牌轮换</option></select></label>
     ${st.cleric ? `<label class="ck">${ic('eye')} 牧师查验 <select style="width:auto" ${host ? '' : 'disabled'} onchange="setS({clericTiming:this.value})"><option value="start" ${st.clericTiming !== 'propose' ? 'selected' : ''}>开局查首任队长</option><option value="propose" ${st.clericTiming === 'propose' ? 'selected' : ''}>首次发车后查发车的队长</option></select></label>` : ''}</div>
@@ -939,8 +941,8 @@ setInterval(tick, 500);
 // 刺杀 / 招募超时：疯狂提醒——对应玩家手机每 3 秒震动+警报，投屏全屏红闪+警报，直到提交为止
 let lastNag = 0;
 setInterval(() => {
-  const isAss = S && S.phase === 'assassin' && S.assassinEndsAt && Date.now() + clockSkew > S.assassinEndsAt;
-  const isRec = S && S.phase === 'recruit' && S.recruit && S.recruit.endsAt && Date.now() + clockSkew > S.recruit.endsAt;
+  const isAss = S && S.phase === 'assassin' && S.assassinEndsAt && Date.now() + clockSkew > S.assassinEndsAt + 1500;
+  const isRec = S && S.phase === 'recruit' && S.recruit && S.recruit.endsAt && Date.now() + clockSkew > S.recruit.endsAt + 1500;
   const over = !!(isAss || isRec);
   document.body.classList.toggle('nag', over);
   if (!over || Date.now() - lastNag < 3000) return;

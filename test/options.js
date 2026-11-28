@@ -93,5 +93,44 @@ async function winThree(R) {
     ok(!tvS.speech, '大屏可以结束发言');
     tv.close(); spec.close();
   }
+  { // 投票计时超时直接同意 + 刺杀计时超时随机刺
+    const R = await room(5, { voteSecs: 1, assassinSecs: 1, percival: false, morgana: false });
+    const s = R.S(), goods = s.players.map((p) => p.id).filter((id) => !R.by(id).s.myRole.evilNow);
+    R.tx(R.by(s.leader), { t: 'propose', team: goods.slice(0, s.teamSizes[0]) }); await sleep(80);
+    ok(R.S().phase === 'vote' && R.S().voteSecs === 1 && R.S().voteEndsAt > Date.now(), '发车投票显示倒计时');
+    R.tx(R.cl[0], { t: 'vote', approve: false }); // 只投 1 人反对，其余 4 人超时自动同意
+    await sleep(1400);
+    const hv = R.S().history.find((h) => h.type === 'vote');
+    ok(R.S().phase === 'quest' && hv && hv.auto && Object.values(hv.votes).filter(Boolean).length === 4, '投票超时后未投玩家自动投同意并进入任务');
+    // 禁用投票限时快速推满 3 次任务进入 1 秒刺杀倒计时
+    for (const id of R.S().team) R.tx(R.by(id), { t: 'quest', card: 'S' }); await sleep(120);
+    for (let k = 0; k < 2; k++) {
+      const cur = R.S();
+      R.tx(R.by(cur.leader), { t: 'propose', team: goods.slice(0, cur.teamSizes[cur.quest]) }); await sleep(70);
+      R.cl.forEach((c) => R.tx(c, { t: 'vote', approve: true })); await sleep(90);
+      for (const id of R.S().team) R.tx(R.by(id), { t: 'quest', card: 'S' }); await sleep(120);
+    }
+    ok(R.S().phase === 'assassin' && R.S().assassinSecs === 1, '3 胜进入 1 秒刺杀计时');
+    await sleep(1400);
+    ok(R.S().phase === 'end' && R.S().assassinTarget && R.S().reason.includes('超时随机'), '刺杀超时后自动随机刺杀一名好人并结束对局');
+  }
+  { // 湖中仙女计时超时自动随机查验
+    const R = await room(6, { lady: true, ladySecs: 1, voteSecs: 0, percival: false, morgana: false });
+    const runQuest = async () => {
+      const s = R.S();
+      R.tx(R.by(s.leader), { t: 'propose', team: s.players.slice(0, s.teamSizes[s.quest]).map((p) => p.id) }); await sleep(70);
+      R.cl.forEach((c) => R.tx(c, { t: 'vote', approve: true })); await sleep(90);
+      for (const id of R.S().team) R.tx(R.by(id), { t: 'quest', card: 'S' }); await sleep(120);
+    };
+    await runQuest(); // 第 1 轮后不用
+    ok(R.S().phase === 'propose' && R.S().quest === 1, '第 1 轮后直接进第 2 轮');
+    await runQuest(); // 第 2 轮后进湖中仙女
+    const oldHolder = R.S().lady.holder;
+    ok(R.S().phase === 'lady' && R.S().lady.secs === 1 && R.S().lady.endsAt > Date.now(), '第 2 轮后进入 1 秒湖中仙女倒计时');
+    await sleep(1400);
+    const s2 = R.S();
+    ok(s2.phase === 'propose' && s2.quest === 2 && s2.lady.holder !== oldHolder, '湖中仙女超时后自动随机查验并移交仙女进入下一轮');
+    ok(R.by(oldHolder).s.myChecks.length === 1 && s2.history.some((h) => h.type === 'lady' && h.auto), '原持有人私密收到查验结果且复盘标超时随机');
+  }
   console.log(fails ? fails + ' 项失败' : '全部通过'); process.exit(fails ? 1 : 0);
 })();

@@ -22,7 +22,7 @@ const gh = (p, opt = {}) => fetch(`https://api.github.com/repos/${REPO}${p ? "/"
 // 房间 → 可存的纯数据（去掉连接、定时器）
 function pack(rooms) {
   return JSON.stringify([...rooms.values()].map((r) => {
-    const { gods, watchers, speechTimer, ...rest } = r;
+    const { gods, watchers, speechTimer, phaseTimer, ...rest } = r;
     return { ...rest, players: r.players.map(({ ws, ...p }) => p) };
   }));
 }

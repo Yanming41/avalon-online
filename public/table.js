@@ -224,7 +224,7 @@ function centerStage() {
   switch (S.phase) {
     case 'plot_deal': return head('阴谋卡分配', S.plot.action ? `${seat(S.plot.action.owner)}号 使用「${PLOT_CARDS[S.plot.action.type]?.name || S.plot.action.type}」` : `队长 ${seat(S.leader)}号 分牌`);
     case 'propose': return head(`第 ${S.quest + 1} 轮 · 组队`, `队长 ${seat(S.leader)}号 选 ${need} 人${S.rejects ? ` · 已否决 ${S.rejects} 次` : ''}`);
-    case 'vote': return head('发车投票', `${S.voted.length}/${n} 已投`);
+    case 'vote': return (S.voteEndsAt ? hourglass(S.voteEndsAt, S.voteSecs, WATCH ? 150 : 38) : '') + head('发车投票', `${S.voted.length}/${n} 已投${S.voteEndsAt ? ' · 超时默认同意' : ''}`);
     case 'plot_vote': return head('国王归来', '决定是否否决组队');
     case 'watch': return head('监视标记', `队长 ${seat(S.leader)}号 指定 1 名队员`);
     case 'plot_prequest': return head('找到你了！', '决定是否指定明牌出牌');
@@ -232,9 +232,9 @@ function centerStage() {
     case 'excalibur': return head('王者之剑', `${seat(S.excalibur)}号 决定是否翻牌`);
     case 'plot_ambush': return head('伏击', '决定是否偷看任务牌');
     case 'trapper': return head('陷阱师', `队长 ${seat(S.leader)}号 偷看并弃 1 张牌`);
-    case 'lady': return head('湖中仙女', `${seat(S.lady.holder)}号 正在查验`);
-    case 'recruit': return (S.recruit && S.recruit.endsAt ? hourglass(S.recruit.endsAt, S.recruit.secs, WATCH ? 150 : 38) : '') + head('招募阶段', `${seat(S.recruit.recruiter)}号 尝试招募仆人`);
-    case 'assassin': return (S.assassinEndsAt ? hourglass(S.assassinEndsAt, S.assassinSecs, WATCH ? 150 : 38) : '') + head(S.canKillMessengers ? '最终刺杀' : '刺杀梅林', S.assassinRandom ? `没有刺客 · 随机抽中 ${seat(S.assassin)}号 拍板` : `${seat(S.assassin)}号 拍板`);
+    case 'lady': return (S.lady && S.lady.endsAt ? hourglass(S.lady.endsAt, S.lady.secs, WATCH ? 150 : 38) : '') + head('湖中仙女', `${seat(S.lady.holder)}号 正在查验${S.lady && S.lady.endsAt ? ' · 超时随机查验' : ''}`);
+    case 'recruit': return (S.recruit && S.recruit.endsAt ? hourglass(S.recruit.endsAt, S.recruit.secs, WATCH ? 150 : 38) : '') + head('招募阶段', `${seat(S.recruit.recruiter)}号 尝试招募仆人${S.recruit.endsAt ? ' · 超时随机招募' : ''}`);
+    case 'assassin': return (S.assassinEndsAt ? hourglass(S.assassinEndsAt, S.assassinSecs, WATCH ? 150 : 38) : '') + head(S.canKillMessengers ? '最终刺杀' : '刺杀梅林', `${S.assassinRandom ? `没有刺客 · 随机抽中 ${seat(S.assassin)}号 拍板` : `${seat(S.assassin)}号 拍板`}${S.assassinEndsAt ? ' · 超时随机刺杀' : ''}`);
     case 'end': return `<div class="cs-t ${S.winner}">${S.soloWinner ? '游侠独自获胜' : S.winner === 'good' ? '正义阵营获胜' : '邪恶阵营获胜'}</div><div class="cs-s">${esc(S.reason)}</div>`;
   }
   return '';
@@ -324,15 +324,16 @@ function actionBar() {
     const team = lst(S.team.map(seat).sort((a, b) => a - b));
     const waitCharge = S.plot && S.plot.chargeWait && S.plot.chargeWait.length;
     const isCharge = S.plot && S.plot.chargeWait && S.plot.chargeWait.includes(S.me);
+    const voteClock = S.speech && S.voteEndsAt ? ` · 投票 <span class="timer" data-end="${S.voteEndsAt}"></span>（超时同意）` : '';
     if (S.myVote === undefined) {
       if (waitCharge && !isCharge) {
-        hint = `等待持「冲锋！」的玩家（${S.plot.chargeWait.map(seat).join('、')}号）先亮出投票`;
+        hint = `等待持「冲锋！」的玩家（${S.plot.chargeWait.map(seat).join('、')}号）先亮出投票${voteClock}`;
       } else {
-        hint = `${isCharge ? '⚡「冲锋！」你必须先公开亮票 · ' : ''}是否同意这支队伍：${team}？`;
+        hint = `${isCharge ? '⚡「冲锋！」你必须先公开亮票 · ' : ''}是否同意这支队伍：${team}？${voteClock}`;
         main = `<div class="row"><button class="okb" onclick="send({t:'vote',approve:true})">${ic('check')}同意</button><button class="evil" onclick="send({t:'vote',approve:false})">${ic('cross')}反对</button></div>`;
       }
     } else {
-      hint = `你投了「${S.myVote ? '同意' : '反对'}」· 等待其他人 ${S.voted.length}/${n}`;
+      hint = `你投了「${S.myVote ? '同意' : '反对'}」· 等待其他人 ${S.voted.length}/${n}${voteClock}`;
       if (iLead && S.voted.length === 0) side += `<button class="sm sec" onclick="send({t:'unpropose'})">重新选人</button>`;
     }
   } else if (S.phase === 'plot_vote') {
@@ -442,13 +443,13 @@ function questTrack() {
 function timeline() {
   if (!S.history.length) return '';
   const row = (h) => {
-    if (h.type === 'vote') return `<li class="${h.ok ? 'ok' : 'no'}"><b>第${h.quest + 1}轮 · 第${h.attempt}次组队</b>：队长 ${seat(h.leader)}号 提名 ${h.team.map(seat).sort((a, b) => a - b).join('、')} 号 → ${h.ok ? '通过' : '否决'}<small>同意：${Object.keys(h.votes).filter((k) => h.votes[k]).map(seat).sort((a, b) => a - b).join('、') || '无'}；反对：${Object.keys(h.votes).filter((k) => !h.votes[k]).map(seat).sort((a, b) => a - b).join('、') || '无'}</small></li>`;
+    if (h.type === 'vote') return `<li class="${h.ok ? 'ok' : 'no'}"><b>第${h.quest + 1}轮 · 第${h.attempt}次组队</b>：队长 ${seat(h.leader)}号 提名 ${h.team.map(seat).sort((a, b) => a - b).join('、')} 号 → ${h.ok ? '通过' : '否决'}${h.auto ? '（超时自动同意）' : ''}<small>同意：${Object.keys(h.votes).filter((k) => h.votes[k]).map(seat).sort((a, b) => a - b).join('、') || '无'}；反对：${Object.keys(h.votes).filter((k) => !h.votes[k]).map(seat).sort((a, b) => a - b).join('、') || '无'}</small></li>`;
     if (h.type === 'quest') return `<li class="${h.success ? 'qok' : 'qno'}"><b>第${h.quest + 1}轮任务${h.success ? '成功' : '失败'}</b>：${h.fails} 张失败${h.magics ? `，${h.magics} 张魔法` : ''}${h.msgGood ? `，${h.msgGood} 张好信` : ''}${h.msgEvil ? `，${h.msgEvil} 张坏信` : ''}${h.msgAdjust ? `（第5轮信使修正 ${h.msgAdjust > 0 ? '+' : ''}${h.msgAdjust}）` : ''}${h.rogueGood ? `，${h.rogueGood} 张好游侠` : ''}${h.rogueEvil ? `，${h.rogueEvil} 张坏游侠` : ''}${h.watchTarget ? `；监视 ${seat(h.watchTarget)}号` : ''}${h.trapperExcluded ? `；陷阱师弃掉 ${seat(h.trapperExcluded)}号 的牌` : ''}${h.faceup ? `；${seat(h.faceup.id)}号 明牌${CARD[h.faceup.card]?.t || h.faceup.card}` : ''}${h.excal && h.excal.target ? `；${seat(h.excal.holder)}号 用王者之剑翻了 ${seat(h.excal.target)}号` : ''}</li>`;
     if (h.type === 'watch') return `<li><b>监视标记（第${h.quest + 1}轮）</b>：队长 ${seat(h.leader)}号 监视 ${seat(h.target)}号</li>`;
     if (h.type === 'plot') return `<li><b>阴谋卡分发（第${h.quest + 1}轮）</b>：${seat(h.from)}号 分给 ${seat(h.to)}号「${PLOT_CARDS[h.card]?.name || h.card}」</li>`;
     if (h.type === 'plotUse') return `<li><b>打出阴谋卡（第${h.quest + 1}轮）</b>：${seat(h.by)}号 打出「${PLOT_CARDS[h.card]?.name || h.card}」${h.target ? `（目标 ${seat(h.target)}号）` : ''}</li>`;
-    if (h.type === 'recruit') return `<li><b>招募阶段</b>：${h.hit ? `猜中 ${seat(h.target)}号 为不可信的仆人（倒戈接管刺杀）` : '未猜中不可信的仆人'}</li>`;
-    if (h.type === 'lady') return `<li><b>湖中仙女</b>：${seat(h.holder)}号 查验了 ${seat(h.target)}号</li>`;
+    if (h.type === 'recruit') return `<li><b>招募阶段${h.auto ? '（超时随机）' : ''}</b>：${h.hit ? `猜中 ${seat(h.target)}号 为不可信的仆人（倒戈接管刺杀）` : '未猜中不可信的仆人'}</li>`;
+    if (h.type === 'lady') return `<li><b>湖中仙女${h.auto ? '（超时随机）' : ''}</b>：${seat(h.holder)}号 查验了 ${seat(h.target)}号</li>`;
     if (h.type === 'lancelot') return `<li><b>忠诚牌</b>：${h.card === 'switch' ? '换阵营' : '不换'}</li>`;
     return '';
   };

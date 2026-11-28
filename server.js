@@ -44,7 +44,7 @@ const DEFAULT_SETTINGS = {
   leaderMode: 'seq', // seq 按座位顺序 / random 洗牌轮换（每人都当过一轮队长后再重新洗牌）
   clericTiming: 'start', // start 开局查首任队长 / propose 首次发车后查发车的队长
   lancelot: 0, // 0 关闭，1/2/3 对应三套兰斯洛特规则
-  lady: false, excalibur: false, trapper: false, plot: false, speechSecs: 90, recruitSecs: 60, assassinSecs: 120,
+  lady: false, excalibur: false, trapper: false, plot: false, speechSecs: 90, voteSecs: 60, ladySecs: 60, recruitSecs: 60, assassinSecs: 120,
 };
 
 const rooms = new Map();
@@ -189,7 +189,7 @@ function viewFor(room, pid, god) {
     // Only aggregate counts: sorted role names cannot reveal seat/deal order.
     rolesInGame: [...new Set(Object.values(room.roles))].sort(),
     roleCounts: Object.fromEntries([...new Set(Object.values(room.roles))].sort().map((r) => [r, Object.values(room.roles).filter((x) => x === r).length])),
-    lady: room.settings.lady ? { holder: g.ladyHolder, used: g.ladyUsed, log: g.ladyLog } : null,
+    lady: room.settings.lady ? { holder: g.ladyHolder, used: g.ladyUsed, log: g.ladyLog, ...(g.phase === 'lady' ? { endsAt: g.ladyEndsAt || null, secs: g.ladySecs || 0 } : {}) } : null,
     lancelot: g.lancelotRule ? { rule: g.lancelotRule, swapped: g.lancelotSwapped, flips: g.lancelotFlips, left: g.lancelotDeck.length } : null,
     messengers: room.settings.messengers ? { good: g.msgGoodTotal || 0, evil: g.msgEvilTotal || 0 } : null,
     rogue: (room.roles && Object.values(room.roles).some((r) => r === 'good_rogue' || r === 'evil_rogue')) ? { good: (g.rogueGoodQuests || []).length, evil: (g.rogueEvilQuests || []).length, watchTarget: g.watchTarget || null, watchUsed: n >= 7 || g.quest >= 2 } : null,
@@ -216,7 +216,7 @@ function viewFor(room, pid, god) {
     if (g.trapperSeen && g.trapperSeen[pid]) v.myTrapperSeen = g.trapperSeen[pid];
     if (g.plotChecks && g.plotChecks[pid]) v.myPlotChecks = g.plotChecks[pid];
   }
-  if (g.phase === 'vote' && g.votes[pid] !== undefined) v.myVote = g.votes[pid];
+  if (g.phase === 'vote') { if (g.votes[pid] !== undefined) v.myVote = g.votes[pid]; v.voteEndsAt = g.voteEndsAt || null; v.voteSecs = g.voteSecs || 0; }
   if (g.phase === 'quest' && g.team.includes(pid)) { v.myCards = allowedCards(room, pid); if (g.questCards[pid] !== undefined) v.myCard = true; }
   if (g.phase === 'recruit') v.recruit = { recruiter: g.recruitId, endsAt: g.recruitEndsAt || null, secs: g.recruitSecs || 0 };
   if (g.phase === 'assassin' || g.phase === 'end') { v.assassinRandom = !!g.assassinRandom; v.recruited = g.recruited || null; }
@@ -308,6 +308,51 @@ function handleSpeech(room, msg, pid, isAdmin) {
   }
   return false;
 }
+function clearPhaseTimer(room) { clearTimeout(room.phaseTimer); room.phaseTimer = null; }
+function armPhaseTimer(room) {
+  clearPhaseTimer(room);
+  const g = room.game; if (!g) return;
+  const phase = g.phase;
+  const endsAt = phase === 'vote' ? g.voteEndsAt : phase === 'lady' ? g.ladyEndsAt : phase === 'recruit' ? g.recruitEndsAt : phase === 'assassin' ? g.assassinEndsAt : null;
+  if (!endsAt) return;
+  const gid = g.id;
+  room.phaseTimer = setTimeout(() => {
+    if (room.game !== g || g.id !== gid || g.phase !== phase) return;
+    if (Date.now() + 100 < endsAt) { armPhaseTimer(room); return; }
+    onPhaseTimeout(room);
+  }, Math.max(0, endsAt - Date.now()) + 150);
+}
+function onPhaseTimeout(room) {
+  const g = room.game; clearPhaseTimer(room); if (!g) return;
+  if (g.phase === 'vote') {
+    for (const p of room.players) if (g.votes[p.id] === undefined) g.votes[p.id] = true;
+    finishVote(room, true);
+    broadcast(room);
+  } else if (g.phase === 'lady') {
+    const cands = room.players.filter((p) => p.id !== g.ladyHolder && !g.ladyUsed.includes(p.id));
+    if (!cands.length) { g.ladyEndsAt = null; g.quest++; nextLeader(room); enterPropose(room, true); broadcast(room); return; }
+    doLadyCheck(room, g.ladyHolder, cands[crypto.randomInt(cands.length)], true);
+    broadcast(room);
+  } else if (g.phase === 'recruit') {
+    const cands = room.players.filter((p) => !evilNow(room, p.id));
+    if (!cands.length) { enterAssassin(room); broadcast(room); return; }
+    const target = cands[crypto.randomInt(cands.length)];
+    const ut = room.players.find((p) => room.roles[p.id] === 'untrustworthy');
+    const hit = !!(ut && ut.id === target.id);
+    if (hit) g.recruited = ut.id;
+    event(room, { type: 'recruit', hit, recruiter: g.recruitId, auto: true });
+    g.history.push({ type: 'recruit', hit, target: hit ? target.id : null, auto: true });
+    enterAssassin(room);
+    broadcast(room);
+  } else if (g.phase === 'assassin') {
+    const cands = room.players.filter((p) => !evilNow(room, p.id));
+    if (!cands.length) { endGame(room, 'good', '超时且场上没有好人可刺杀，好人获胜'); broadcast(room); return; }
+    const target = cands[crypto.randomInt(cands.length)];
+    doAssassinate(room, target.id, null, { auto: true });
+    broadcast(room);
+  }
+}
+
 function startGame(room) {
   const n = room.players.length;
   if (n < 5) return `至少 5 人，现在 ${n} 人`;
@@ -318,7 +363,7 @@ function startGame(room) {
   // 座位顺序 = 准备阶段排好的现实座位（不再打乱）；身份随机发
   const dealt = shuffle(r.roles);
   room.players.forEach((p, i) => { room.roles[p.id] = dealt[i]; });
-  clearTimeout(room.speechTimer);
+  clearTimeout(room.speechTimer); clearPhaseTimer(room);
   const leaderIdx = crypto.randomInt(n);
   const g = room.game = { teamSizes: teamFor(room),
     id: crypto.randomUUID().slice(0, 8), phase: 'propose', leaderIdx,
@@ -359,7 +404,7 @@ function nextLeader(room) {
   } else g.leaderIdx = (g.leaderIdx + 1) % n;
 }
 function endGame(room, winner, reason, extra = {}) {
-  clearSpeech(room); Object.assign(room.game, { phase: 'end', winner, reason, ...extra });
+  clearSpeech(room); clearPhaseTimer(room); Object.assign(room.game, { phase: 'end', winner, reason, ...extra });
   const g = room.game; if (g.saved) return; g.saved = true;
   // 生成战绩记录（用座位号和昵称，不存 token 等隐私）
   const seatOf = (id) => room.players.findIndex((p) => p.id === id) + 1;
@@ -467,7 +512,7 @@ function handle(room, pid, msg, ws) {
       const e = startGame(room); if (e) return err(ws, e); break;
     }
     case 'lobby':
-      if (!isHost) return; clearSpeech(room); room.game = null; room.roles = {}; break;
+      if (!isHost) return; clearSpeech(room); clearPhaseTimer(room); room.game = null; room.roles = {}; break;
     case 'trickShow':
       if (!g || room.roles[pid] !== 'trickster') return;
       g.trickShowEvil[pid] = !!msg.evil; break;
@@ -487,6 +532,8 @@ function handle(room, pid, msg, ws) {
         g.excalibur = msg.excalibur;
       }
       g.team = team; g.votes = {}; g.phase = 'vote';
+      const vs = room.settings.voteSecs ?? 60; g.voteSecs = vs; g.voteEndsAt = vs ? Date.now() + vs * 1000 : null;
+      armPhaseTimer(room);
       g.chargeHolders = room.settings.plot ? room.players.filter((p) => ((g.plotHands || {})[p.id] || []).some((c) => c.type === 'charge')).map((p) => p.id) : [];
       if (room.settings.clericTiming === 'propose' && !g.clericDone) { // 第一次发车后，牧师查这位发车的队长
         g.clericDone = true;
@@ -497,6 +544,7 @@ function handle(room, pid, msg, ws) {
     }
     case 'unpropose': // 队长投票前反悔重选
       if (!g || g.phase !== 'vote' || leaderId !== pid || Object.keys(g.votes).length) return;
+      clearPhaseTimer(room); g.voteEndsAt = null;
       g.phase = 'propose'; g.excalibur = null; g.chargeHolders = []; break;
     case 'vote': {
       if (!g || g.phase !== 'vote') return;
@@ -672,11 +720,7 @@ function handle(room, pid, msg, ws) {
       if (!g || g.phase !== 'lady' || g.ladyHolder !== pid) return;
       const t = room.players.find((p) => p.id === msg.id);
       if (!t || t.id === pid || g.ladyUsed.includes(t.id)) return err(ws, '不能查自己或拿过湖中仙女的人');
-      (g.ladyResults[pid] = g.ladyResults[pid] || []).push({ id: t.id, evil: loyaltyShown(room, t.id), quest: g.quest });
-      const rec = { type: 'lady', quest: g.quest, holder: pid, target: t.id };
-      g.ladyLog.push(rec); g.history.push(rec); event(room, rec);
-      g.ladyHolder = t.id; g.ladyUsed.push(t.id);
-      g.quest++; nextLeader(room); enterPropose(room, true);
+      doLadyCheck(room, pid, t, false);
       break;
     }
     case 'suggest': // 坏人在刺杀环节标记怀疑对象，仅坏人可见
@@ -699,16 +743,19 @@ function applySettings(room, s) {
   if ('lancelot' in s) room.settings.lancelot = [0, 1, 2, 3].includes(+s.lancelot) ? +s.lancelot : 0;
   if ('assassinSecs' in s) room.settings.assassinSecs = Math.max(0, Math.min(900, parseInt(s.assassinSecs) || 0));
   if ('recruitSecs' in s) room.settings.recruitSecs = Math.max(0, Math.min(900, parseInt(s.recruitSecs) || 0));
+  if ('ladySecs' in s) room.settings.ladySecs = Math.max(0, Math.min(900, parseInt(s.ladySecs) || 0));
+  if ('voteSecs' in s) room.settings.voteSecs = Math.max(0, Math.min(900, parseInt(s.voteSecs) || 0));
   if ('teamSizes' in s) room.settings.teamSizes = Array.isArray(s.teamSizes) && s.teamSizes.length === 5 ? s.teamSizes.map((x) => Math.max(1, Math.min(30, parseInt(x) || 1))) : null;
   if ('speechSecs' in s) room.settings.speechSecs = Math.max(15, Math.min(600, parseInt(s.speechSecs) || 90));
 }
 
-function finishVote(room) {
+function finishVote(room, auto = false) {
   const g = room.game;
+  clearPhaseTimer(room); g.voteEndsAt = null;
   g.leadStolenThisVote = false;
   const approves = Object.values(g.votes).filter(Boolean).length;
   const ok = approves * 2 > room.players.length;
-  const rec = { type: 'vote', quest: g.quest, attempt: g.rejects + 1, leader: room.players[g.leaderIdx].id, team: g.team, votes: { ...g.votes }, ok, excalibur: g.excalibur };
+  const rec = { type: 'vote', quest: g.quest, attempt: g.rejects + 1, leader: room.players[g.leaderIdx].id, team: g.team, votes: { ...g.votes }, ok, excalibur: g.excalibur, ...(auto ? { auto: true } : {}) };
   g.history.push(rec); event(room, rec);
   clearSpeech(room);
   if (ok) {
@@ -778,22 +825,42 @@ function finishQuest(room, excal) {
     enterAssassin(room); return;
   }
   // 湖中仙女：第 2、3、4 轮任务结束后使用
-  if (room.settings.lady && g.quest >= 1 && g.quest <= 3) { clearSpeech(room); g.phase = 'lady'; return; }
+  if (room.settings.lady && g.quest >= 1 && g.quest <= 3) { enterLady(room); return; }
+  g.quest++; nextLeader(room); enterPropose(room, true);
+}
+
+function enterLady(room) {
+  const g = room.game;
+  clearSpeech(room); clearPhaseTimer(room);
+  g.phase = 'lady';
+  const ls = room.settings.ladySecs ?? 60; g.ladySecs = ls; g.ladyEndsAt = ls ? Date.now() + ls * 1000 : null;
+  armPhaseTimer(room);
+}
+function doLadyCheck(room, pid, t, auto = false) {
+  const g = room.game;
+  clearPhaseTimer(room); g.ladyEndsAt = null;
+  (g.ladyResults[pid] = g.ladyResults[pid] || []).push({ id: t.id, evil: loyaltyShown(room, t.id), quest: g.quest });
+  const rec = { type: 'lady', quest: g.quest, holder: pid, target: t.id, ...(auto ? { auto: true } : {}) };
+  g.ladyLog.push(rec); g.history.push(rec); event(room, rec);
+  g.ladyHolder = t.id; g.ladyUsed.push(t.id);
   g.quest++; nextLeader(room); enterPropose(room, true);
 }
 
 function enterRecruit(room) {
   const g = room.game;
+  clearPhaseTimer(room);
   const a = room.players.find((p) => room.roles[p.id] === 'assassin');
   const evils = room.players.filter((p) => evilNow(room, p.id));
   g.recruitId = a ? a.id : (g.recruitAssassinId || (evils[0] && evils[0].id) || null);
   g.phase = 'recruit';
   const rs = room.settings.recruitSecs ?? 60; g.recruitSecs = rs; g.recruitEndsAt = rs ? Date.now() + rs * 1000 : null;
   if (!g.recruitId) enterAssassin(room);
+  else armPhaseTimer(room);
 }
 
 function enterAssassin(room) {
   const g = room.game;
+  clearPhaseTimer(room);
   g.phase = 'assassin'; g.evilSuggest = {};
   if (g.recruited) {
     g.assassinId = g.recruited;
@@ -806,9 +873,11 @@ function enterAssassin(room) {
   }
   const as = room.settings.assassinSecs ?? 120; g.assassinSecs = as; g.assassinEndsAt = as ? Date.now() + as * 1000 : null;
   if (!g.assassinId) endGame(room, 'good', '场上没有坏人可以刺杀，好人获胜');
+  else armPhaseTimer(room);
 }
 function doAssassinate(room, id, ws, msg = {}) {
   const g = room.game;
+  const prefix = msg.auto ? '超时随机：' : '';
   if (msg.mode === 'messengers' && room.settings.messengers) {
     const ids = [...new Set(Array.isArray(msg.ids) ? msg.ids : [])].map((x) => room.players.find((p) => p.id === x)).filter(Boolean);
     if (ids.length !== 2 || ids.some((t) => evilNow(room, t.id))) return err(ws, '请选两名好人阵营的玩家作为双信使目标');
@@ -816,16 +885,16 @@ function doAssassinate(room, id, ws, msg = {}) {
     g.assassinTarget = ids[0].id;
     const hitBoth = ids.every((t) => ['junior_messenger', 'senior_messenger'].includes(room.roles[t.id]));
     const whoLabel = `${ids[0].name} 与 ${ids[1].name}`;
-    if (hitBoth) endGame(room, 'evil', `刺客改刺双信使并猜中（${whoLabel}），坏人翻盘`);
-    else endGame(room, 'good', `刺客改刺双信使（${whoLabel}），没猜中两人，好人获胜`);
+    if (hitBoth) endGame(room, 'evil', `${prefix}刺客改刺双信使并猜中（${whoLabel}），坏人翻盘`);
+    else endGame(room, 'good', `${prefix}刺客改刺双信使（${whoLabel}），没猜中两人，好人获胜`);
     return;
   }
   const target = room.players.find((p) => p.id === id);
   if (!target || evilNow(room, target.id)) return err(ws, '请选一个好人阵营的玩家');
   g.assassinTarget = target.id;
   const killer = g.recruited ? '被招募的不可信仆人' : '刺客';
-  if (room.roles[target.id] === 'merlin') endGame(room, 'evil', `${killer}刺中了梅林（${target.name}），坏人翻盘`);
-  else endGame(room, 'good', `${killer}刺了 ${target.name}，没刺中梅林，好人获胜`);
+  if (room.roles[target.id] === 'merlin') endGame(room, 'evil', `${prefix}${killer}刺中了梅林（${target.name}），坏人翻盘`);
+  else endGame(room, 'good', `${prefix}${killer}刺了 ${target.name}，没刺中梅林，好人获胜`);
 }
 
 // ---------- 上帝模式 ----------
@@ -856,19 +925,20 @@ function godAction(room, msg, ws) {
     if (!msg.msg || ['create', 'join', 'god', 'g'].includes(msg.msg.t)) return;
     return handle(room, id, msg.msg, ws);
   }
-  else if (a === 'lobby') { clearSpeech(room); room.game = null; room.roles = {}; }
+  else if (a === 'lobby') { clearSpeech(room); clearPhaseTimer(room); room.game = null; room.roles = {}; }
   else if (a === 'start') { const e = startGame(room); if (e) return err(ws, e); }
   else if (a === 'settings') applySettings(room, msg.settings || {});
   else if (!g) return err(ws, '游戏还没开始');
-  else if (a === 'leader' && p) { g.leaderIdx = room.players.indexOf(p); if (g.phase === 'vote') { g.phase = 'propose'; g.votes = {}; } clearSpeech(room); }
+  else if (a === 'leader' && p) { g.leaderIdx = room.players.indexOf(p); if (g.phase === 'vote') { clearPhaseTimer(room); g.voteEndsAt = null; g.phase = 'propose'; g.votes = {}; } clearSpeech(room); }
   else if (a === 'role' && p && ROLE_NAME[msg.role]) room.roles[p.id] = msg.role;
   else if (a === 'rejects') g.rejects = Math.max(0, Math.min(4, parseInt(msg.n) || 0));
-  else if (a === 'resetRound') { g.questCards = {}; clearSpeech(room); enterPropose(room, false); }
+  else if (a === 'resetRound') { g.questCards = {}; clearSpeech(room); clearPhaseTimer(room); g.voteEndsAt = null; enterPropose(room, false); }
   else if (a === 'undoQuest') {
     if (!g.results.length) return err(ws, '还没有任务结果');
     g.results.pop(); g.quest = g.results.length;
     const i = g.history.map((h) => h.type).lastIndexOf('quest'); if (i >= 0) g.history.splice(i, 1);
     g.questCards = {}; delete g.winner; delete g.reason; delete g.assassinTarget;
+    clearPhaseTimer(room); g.voteEndsAt = null; g.ladyEndsAt = null; g.recruitEndsAt = null; g.assassinEndsAt = null;
     g.phase = 'propose'; g.team = []; g.votes = {};
   } else if (a === 'setResult') {
     const r = g.results[msg.i]; if (!r) return;
@@ -883,7 +953,7 @@ function godAction(room, msg, ws) {
     if (g.excalibur) g.phase = 'excalibur'; else nextAfterQuestCards(room);
   } else if (a === 'skipPhase') { // 跳过特殊阶段
     if (g.phase === 'excalibur') { g._pendingExcal = { holder: g.excalibur, target: null }; nextAfterQuestCards(room); }
-    else if (g.phase === 'lady') { g.quest++; nextLeader(room); enterPropose(room, true); }
+    else if (g.phase === 'lady') { clearPhaseTimer(room); g.ladyEndsAt = null; g.quest++; nextLeader(room); enterPropose(room, true); }
     else if (g.phase === 'watch') enterPreQuestOrQuest(room);
     else if (g.phase === 'trapper') { g.trapperDiscarded = g.team[0]; finishQuest(room, g._pendingExcal || null); }
     else if (g.phase === 'plot_deal') { g.plotPending = []; g.plotAction = null; g.phase = 'propose'; }
@@ -1033,7 +1103,7 @@ wss.on('connection', (ws, req) => {
 });
 
 // 6 小时没人动的房间清掉
-setInterval(() => { const t = Date.now(); for (const [c, r] of rooms) if (t - r.touched > 6 * 3600e3) { clearTimeout(r.speechTimer); rooms.delete(c); state.schedule(rooms); } }, 600e3);
+setInterval(() => { const t = Date.now(); for (const [c, r] of rooms) if (t - r.touched > 6 * 3600e3) { clearTimeout(r.speechTimer); clearPhaseTimer(r); rooms.delete(c); state.schedule(rooms); } }, 600e3);
 // 心跳，防止云平台断开空闲连接（连续 3 个周期无任何 pong 或消息才判死，避免手机切后台几秒被误杀）
 setInterval(() => wss.clients.forEach((c) => {
   if (c.readyState !== 1) return;
@@ -1046,6 +1116,7 @@ setInterval(() => wss.clients.forEach((c) => {
 function restoreRoom(r) {
   const room = { ...r, gods: new Set(), watchers: new Set(), players: r.players.map((p) => ({ ...p, ws: null })) };
   if (room.game && room.game.speech && room.game.speech.endsAt) armSpeechTimer(room);
+  if (room.game && ['vote', 'lady', 'recruit', 'assassin'].includes(room.game.phase)) armPhaseTimer(room);
   return room;
 }
 function applySnapshot(arr, onlyIdle) {
@@ -1053,7 +1124,7 @@ function applySnapshot(arr, onlyIdle) {
   for (const r of arr || []) {
     const cur = rooms.get(r.code);
     if (onlyIdle && cur && (cur.players.some((p) => p.ws) || cur.watchers.size || cur.gods.size)) continue; // 本进程里已经有人在用的房间以本进程为准
-    if (cur) clearTimeout(cur.speechTimer);
+    if (cur) { clearTimeout(cur.speechTimer); clearPhaseTimer(cur); }
     try { rooms.set(r.code, restoreRoom(r)); n++; } catch (e) { console.log('state: 恢复房间失败', r.code, e.message); }
   }
   return n;
