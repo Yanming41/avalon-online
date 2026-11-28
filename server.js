@@ -9,6 +9,7 @@ const state = require('./state');
 const accounts = require('./accounts');
 
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || undefined;
 const GOD_PASSWORD = process.env.GOD_PASSWORD || ''; // 为空则关闭上帝模式
 const PUB = path.join(__dirname, 'public');
 
@@ -40,7 +41,7 @@ const DEFAULT_SETTINGS = {
   percival: true, morgana: true, mordred: false, oberon: false, cleric: false, troublemaker: false,
   lunatic: false, brute: false, revealer: false, trickster: false, good_sorcerer: false, evil_sorcerer: false, assassin: true,
   untrustworthy: false, good_rogue: false, evil_rogue: false, messengers: false,
-  leaderMode: 'seq', // seq 按座位顺序 / random 每轮随机
+  leaderMode: 'seq', // seq 按座位顺序 / random 洗牌轮换（每人都当过一轮队长后再重新洗牌）
   clericTiming: 'start', // start 开局查首任队长 / propose 首次发车后查发车的队长
   lancelot: 0, // 0 关闭，1/2/3 对应三套兰斯洛特规则
   lady: false, excalibur: false, trapper: false, plot: false, speechSecs: 90, recruitSecs: 60, assassinSecs: 120,
@@ -320,7 +321,9 @@ function startGame(room) {
   clearTimeout(room.speechTimer);
   const leaderIdx = crypto.randomInt(n);
   const g = room.game = { teamSizes: teamFor(room),
-    id: crypto.randomUUID().slice(0, 8), phase: 'propose', leaderIdx, quest: 0, results: [], rejects: 0, team: [], votes: {}, questCards: {},
+    id: crypto.randomUUID().slice(0, 8), phase: 'propose', leaderIdx,
+    leaderBag: shuffle(Array.from({ length: n }, (_, i) => i).filter((i) => i !== leaderIdx)),
+    quest: 0, results: [], rejects: 0, team: [], votes: {}, questCards: {},
     history: [], speech: null, evilSuggest: {}, seq: 0, revealed: [], trickShowEvil: {},
     excalibur: null, excalSeen: {}, ladyResults: {}, ladyLog: [], ladyUsed: [], ladyHolder: null,
     lancelotRule: s.lancelot || 0, lancelotSwapped: false, lancelotFlips: [], lancelotDeck: [],
@@ -345,8 +348,15 @@ function startGame(room) {
 }
 function nextLeader(room) {
   const g = room.game, n = room.players.length;
-  if (room.settings.leaderMode === 'random') { let i; do { i = crypto.randomInt(n); } while (n > 1 && i === g.leaderIdx); g.leaderIdx = i; }
-  else g.leaderIdx = (g.leaderIdx + 1) % n;
+  if (room.settings.leaderMode === 'random') {
+    if (!g.leaderBag || !g.leaderBag.length) g.leaderBag = shuffle(Array.from({ length: n }, (_, i) => i));
+    if (n > 1 && g.leaderBag[0] === g.leaderIdx) {
+      if (g.leaderBag.length === 1) g.leaderBag.push(...shuffle(Array.from({ length: n }, (_, i) => i)));
+      const j = g.leaderBag.findIndex((x) => x !== g.leaderIdx);
+      [g.leaderBag[0], g.leaderBag[j]] = [g.leaderBag[j], g.leaderBag[0]];
+    }
+    g.leaderIdx = g.leaderBag.shift();
+  } else g.leaderIdx = (g.leaderIdx + 1) % n;
 }
 function endGame(room, winner, reason, extra = {}) {
   clearSpeech(room); Object.assign(room.game, { phase: 'end', winner, reason, ...extra });
@@ -1055,4 +1065,4 @@ function refreshRooms() {
 const loadState = () => state.fetchSnapshot().then((arr) => console.log(`state: 恢复 ${applySnapshot(arr, false)} 个房间${state.remote ? '（GitHub）' : ''}`)).catch(() => {});
 let stopping = false;
 process.on('SIGTERM', () => { if (stopping) return; stopping = true; console.log('state: 收到 SIGTERM，保存快照'); state.flush(rooms).finally(() => process.exit(0)); setTimeout(() => process.exit(0), 8000); });
-Promise.all([records.load(), loadState()]).finally(() => server.listen(PORT, () => console.log(`Avalon on http://localhost:${PORT}  god=${GOD_PASSWORD ? 'on' : 'off'}  records=${records.enabled() ? 'github' : 'local'}`)));
+Promise.all([records.load(), loadState()]).finally(() => server.listen(PORT, HOST, () => console.log(`Avalon on http://${HOST || 'localhost'}:${PORT}  god=${GOD_PASSWORD ? 'on' : 'off'}  records=${records.enabled() ? 'github' : 'local'}`)));

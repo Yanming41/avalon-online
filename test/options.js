@@ -27,13 +27,27 @@ async function winThree(R) {
     const t = a.s.players.find((p) => !a.s.evilTeam.includes(p.id)); R.tx(a, { t: 'assassinate', id: t.id }); await sleep(120);
     ok(R.S().phase === 'end', '随机抽中的坏人可以执行刺杀');
   }
-  { // 队长每轮随机
-    const R = await room(7, { leaderMode: 'random' });
-    const seen = new Set([R.S().leader]); let prev = R.S().leader, repeat = false;
-    for (let k = 0; k < 4; k++) { R.tx(R.by(R.S().leader), { t: 'propose', team: R.S().players.slice(0, R.S().teamSizes[R.S().quest]).map((p) => p.id) }); await sleep(70); R.cl.forEach((c) => R.tx(c, { t: 'vote', approve: false })); await sleep(110); if (R.S().leader === prev) repeat = true; prev = R.S().leader; seen.add(prev); }
-    ok(!repeat, '随机队长不会连续两次是同一个人');
-    const ids = R.S().players.map((p) => p.id), seq = [...seen].map((id) => ids.indexOf(id));
-    ok(seen.size >= 2, `随机模式下换了 ${seen.size} 个不同的队长`);
+  { // 队长洗牌轮换：5 人局两轮共 10 次队长，每轮 5 人不重复，跨轮不连续同一人
+    const R = await room(5, { leaderMode: 'random' });
+    const log = [R.S().leader]; let repeat = false;
+    const rejectStep = async () => {
+      const s = R.S(), prev = s.leader;
+      R.tx(R.by(prev), { t: 'propose', team: s.players.slice(0, s.teamSizes[s.quest]).map((p) => p.id) }); await sleep(70);
+      R.cl.forEach((c) => R.tx(c, { t: 'vote', approve: false })); await sleep(110);
+      if (R.S().leader === prev) repeat = true;
+      log.push(R.S().leader);
+    };
+    for (let k = 0; k < 4; k++) await rejectStep();
+    ok(new Set(log.slice(0, 5)).size === 5, '洗牌轮换第 1 轮 5 名玩家各当过 1 次队长');
+    const s = R.S(), prev = s.leader, goods = s.players.map((p) => p.id).filter((id) => !R.by(id).s.myRole.evilNow);
+    R.tx(R.by(prev), { t: 'propose', team: goods.slice(0, s.teamSizes[s.quest]) }); await sleep(70);
+    R.cl.forEach((c) => R.tx(c, { t: 'vote', approve: true })); await sleep(100);
+    for (const id of R.S().team) R.tx(R.by(id), { t: 'quest', card: 'S' }); await sleep(130);
+    if (R.S().leader === prev) repeat = true;
+    log.push(R.S().leader);
+    for (let k = 0; k < 4; k++) await rejectStep();
+    ok(new Set(log.slice(5, 10)).size === 5, '洗牌轮换第 2 轮重新洗牌后 5 名玩家再次各当 1 次队长');
+    ok(!repeat, '洗牌轮换全过程（含跨轮边界）不会连续两次是同一个人');
   }
   { // 发言起点 + 方向
     const R = await room(6, {});
